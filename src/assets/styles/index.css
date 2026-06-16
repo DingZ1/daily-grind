@@ -1,0 +1,147 @@
+:root {
+  color-scheme: light;
+  font-family: "Trebuchet MS", "PingFang SC", "Microsoft YaHei", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background:
+    radial-gradient(circle at top left, rgba(255, 127, 80, 0.22), transparent 28%),
+    radial-gradient(circle at top right, rgba(46, 196, 182, 0.22), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 22%),
+    var(--bg);
+  color: var(--text);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.35), transparent 80%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.primary-button,
+.ghost-button,
+.danger-button {
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.primary-button {
+  color: #ffffff;
+  background: linear-gradient(90deg, var(--brand), var(--brand-strong));
+}
+
+.ghost-button {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border);
+}
+
+.danger-button {
+  color: #ffffff;
+  background: #d64550;
+}
+
+:root[data-theme='dark'] body::before {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+}
+
+:root[data-theme='dark'] .ghost-button {
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  border-color: color-mix(in srgb, var(--border) 92%, transparent);
+}
+
+:root[data-theme='dark'] .table-card th,
+:root[data-theme='dark'] .calendar-head,
+:root[data-theme='dark'] .card-head p,
+:root[data-theme='dark'] .chart-scale,
+:root[data-theme='dark'] .trend-axis,
+:root[data-theme='dark'] .bar-item span,
+:root[data-theme='dark'] .donut-center span,
+:root[data-theme='dark'] .legend-item p,
+:root[data-theme='dark'] .empty-cell {
+  color: var(--muted);
+}
+
+:root[data-theme='dark'] .table-card td,
+:root[data-theme='dark'] .spotlight-card h3,
+:root[data-theme='dark'] .tip-card h3,
+:root[data-theme='dark'] .legend-item strong,
+:root[data-theme='dark'] .bar-item strong,
+:root[data-theme='dark'] .donut-center strong {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .line-path,
+:root[data-theme='dark'] .point-dot {
+  filter: drop-shadow(0 0 10px rgba(255, 140, 97, 0.22));
+}
+
+:root[data-theme='dark'] .point-dot {
+  fill: #f7fbff;
+}
+
+:root[data-theme='dark'] .legend-item,
+:root[data-theme='dark'] .bar-track {
+  background: color-mix(in srgb, var(--surface) 94%, #0f1728);
+}
+
+:root[data-theme='dark'] .el-empty__description p,
+:root[data-theme='dark'] .el-form-item__label,
+:root[data-theme='dark'] .el-drawer__body,
+:root[data-theme='dark'] .el-card__header,
+:root[data-theme='dark'] .el-card__body,
+:root[data-theme='dark'] .el-tag,
+:root[data-theme='dark'] .el-alert__title {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .el-input__inner,
+:root[data-theme='dark'] .el-textarea__inner,
+:root[data-theme='dark'] .el-select__placeholder,
+:root[data-theme='dark'] .el-input__wrapper,
+:root[data-theme='dark'] .el-textarea__inner::placeholder,
+:root[data-theme='dark'] .el-input__inner::placeholder {
+  color: var(--text);
+}
+
+:root[data-theme='dark'] .el-input__wrapper,
+:root[data-theme='dark'] .el-textarea__inner,
+:root[data-theme='dark'] .el-select__wrapper {
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--border) 96%, transparent) inset;
+}
+
+:root[data-theme='dark'] .el-tag {
+  border-color: color-mix(in srgb, var(--border) 96%, transparent);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
