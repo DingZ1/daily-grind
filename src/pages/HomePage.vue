@@ -1,6 +1,6 @@
 <template>
   <DefaultLayout>
-    <main class="page-shell aaa">
+    <main class="page-shell">
       <QuarterSummary
         :quarter-label="quarterLabel"
         :target-hours="targetHours"
