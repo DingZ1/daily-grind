@@ -37,6 +37,8 @@ There is no test framework configured yet. For new tests, prefer Vitest with Vue
 
 The local Git metadata does not show a project-specific commit convention beyond the initial clone. Use short, imperative commit subjects such as `Add holiday import validation` or `Fix quarter summary totals`.
 
+Before creating a commit, use the project skill at `.codex/skills/update-readme-on-commit` to add or verify the `README.md` entry describing what changed in that commit.
+
 Pull requests should include a brief summary, testing notes such as `npm run build`, linked issues when available, and screenshots for UI changes. Mention storage changes so reviewers can verify existing records still load correctly.
 
 ## Security & Configuration Tips

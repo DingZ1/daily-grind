@@ -1,0 +1,4 @@
+interface:
+  display_name: "Update README on Commit"
+  short_description: "Keep README change notes current before commits"
+  default_prompt: "Use $update-readme-on-commit to summarize the current changes in README before committing."
