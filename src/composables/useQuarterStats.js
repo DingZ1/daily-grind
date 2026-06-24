@@ -22,6 +22,15 @@ export function useQuarterStats(referenceDate) {
     if (targetHours.value <= 0) return 100
     return Math.min(100, Number(((completedHours.value / targetHours.value) * 100).toFixed(1)))
   })
+  const ratedMarkerRate = computed(() => {
+    if (!hasCustomTarget.value || autoTargetHours.value <= 0) return null
+    if (targetHours.value <= 0) return 100
+
+    return Math.min(100, Number(((autoTargetHours.value / targetHours.value) * 100).toFixed(1)))
+  })
+  const ratedMarkerOverflow = computed(() => (
+    hasCustomTarget.value && autoTargetHours.value > targetHours.value
+  ))
 
   return {
     autoTargetHours,
@@ -31,6 +40,8 @@ export function useQuarterStats(referenceDate) {
     completedHours,
     remainingHours,
     completionRate,
+    ratedMarkerRate,
+    ratedMarkerOverflow,
     quarterInfo,
   }
 }

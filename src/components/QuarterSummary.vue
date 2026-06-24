@@ -6,27 +6,77 @@
       'is-complete': isComplete,
     }"
   >
-    <button
-      class="summary-toggle"
-      type="button"
-      :aria-expanded="String(!collapsed)"
-      :aria-label="toggleLabel"
-      @click="collapsed = !collapsed"
-    >
+    <header class="summary-header">
       <span class="summary-title">
-        <span class="eyebrow">{{ quarterLabel }}</span>
+        <span class="eyebrow">季度查询</span>
+        <strong>{{ quarterLabel }}</strong>
       </span>
 
-      <span class="toggle-icon" aria-hidden="true"></span>
-    </button>
+      <div class="summary-actions" aria-label="查询季度">
+        <div class="period-switcher">
+          <button class="year-step" type="button" aria-label="上一年" @click="shiftYear(-1)">
+            <span aria-hidden="true">&lt;</span>
+          </button>
+          <span class="year-value">{{ queryYear }} 年</span>
+          <button class="year-step" type="button" aria-label="下一年" @click="shiftYear(1)">
+            <span aria-hidden="true">&gt;</span>
+          </button>
+
+          <span class="switcher-divider" aria-hidden="true"></span>
+
+          <button
+            v-for="quarter in quarters"
+            :key="quarter.value"
+            class="quarter-button"
+            :class="{ 'is-active': queryQuarter === quarter.value }"
+            type="button"
+            :aria-pressed="String(queryQuarter === quarter.value)"
+            @click="selectQuarter(quarter.value)"
+          >
+            {{ quarter.label }}
+          </button>
+        </div>
+
+        <button
+          class="summary-toggle"
+          type="button"
+          :aria-expanded="String(!collapsed)"
+          :aria-label="toggleLabel"
+          @click="collapsed = !collapsed"
+        >
+          <span>{{ collapsed ? '详情' : '收起' }}</span>
+          <span class="toggle-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+    </header>
 
     <div class="sprint-progress">
       <span class="progress-meta">
         <span>{{ progressText }}</span>
         <strong>{{ completionRate.toFixed(1) }}%</strong>
       </span>
-      <span class="progress-track" role="progressbar" :aria-valuenow="completionRate" aria-valuemin="0" aria-valuemax="100">
+      <span
+        class="progress-track"
+        :class="{ 'has-rated-marker': showRatedMarker }"
+        role="progressbar"
+        :aria-valuenow="completionRate"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        :aria-valuetext="progressText"
+      >
         <span class="progress-fill" :style="{ width: progressWidth }"></span>
+        <span
+          v-if="showRatedMarker"
+          class="rated-marker"
+          :class="{ 'is-overflow': ratedMarkerOverflow }"
+          :style="{ left: ratedMarkerPosition }"
+          aria-hidden="true"
+        >
+          <span class="rated-marker-label">{{ ratedMarkerLabel }}</span>
+        </span>
+      </span>
+      <span v-if="ratedMarkerOverflow" class="progress-note">
+        额定时长超过计划时长，分割线显示在满格位置。
       </span>
     </div>
 
@@ -39,18 +89,18 @@
       <div class="summary-detail">
         <div class="detail-metrics">
           <div class="detail-metric">
-            <span>季度目标</span>
+            <span>{{ hasCustomTarget ? '计划时长' : '进度满格' }}</span>
             <strong>{{ formatHours(targetHours) }}h</strong>
             <p>{{ targetSourceText }}</p>
           </div>
           <div class="detail-metric">
-            <span>自动目标</span>
+            <span>额定时长</span>
             <strong>{{ formatHours(autoTargetHours) }}h</strong>
             <p>按季度工作日 × 1.36 计算</p>
           </div>
           <div class="detail-metric">
-            <span>当前状态</span>
-            <strong>{{ statusText }}</strong>
+            <span>实际时长</span>
+            <strong>{{ formatHours(completedHours) }}h</strong>
             <p>只累计满足规则的有效加班</p>
           </div>
           <div class="detail-metric">
@@ -62,9 +112,9 @@
 
         <div class="target-editor">
           <div class="editor-copy">
-            <span>目标设置</span>
+            <span>计划设置</span>
             <strong>{{ targetModeText }}</strong>
-            <p>当前设置会随数据一起保存到 daily-grind-data.json。</p>
+            <p>设置后，季度进度满格按计划时长计算，并随数据一起保存。</p>
           </div>
           <div class="target-controls">
             <el-input-number
@@ -75,7 +125,7 @@
               controls-position="right"
               @change="commitTarget"
             />
-            <el-button round plain :disabled="!hasCustomTarget" @click="restoreAutoTarget">恢复自动目标</el-button>
+            <el-button round plain :disabled="!hasCustomTarget" @click="restoreAutoTarget">恢复按额定时长</el-button>
           </div>
         </div>
       </div>
@@ -90,6 +140,14 @@ const props = defineProps({
   quarterLabel: {
     type: String,
     default: '',
+  },
+  queryYear: {
+    type: Number,
+    default: 0,
+  },
+  queryQuarter: {
+    type: Number,
+    default: 1,
   },
   autoTargetHours: {
     type: Number,
@@ -119,26 +177,54 @@ const props = defineProps({
     type: Number,
     default: 0,
   },
+  ratedMarkerRate: {
+    type: Number,
+    default: null,
+  },
+  ratedMarkerOverflow: {
+    type: Boolean,
+    default: false,
+  },
 })
 
-const emit = defineEmits(['update-target', 'clear-target'])
+const emit = defineEmits(['change-quarter', 'update-target', 'clear-target'])
 
 const collapsed = ref(true)
 const targetDraft = ref(0)
+const quarters = [
+  { label: 'Q1', value: 1 },
+  { label: 'Q2', value: 2 },
+  { label: 'Q3', value: 3 },
+  { label: 'Q4', value: 4 },
+]
 
 const isComplete = computed(() => props.completionRate >= 100)
 const progressWidth = computed(() => `${Math.min(Math.max(props.completionRate, 0), 100)}%`)
-const progressText = computed(() => (
-  `${formatHours(props.completedHours)}h / ${formatHours(props.targetHours)}h，剩余 ${formatHours(props.remainingHours)}h`
+const showRatedMarker = computed(() => (
+  props.hasCustomTarget && Number.isFinite(props.ratedMarkerRate)
 ))
+const ratedMarkerPosition = computed(() => (
+  `${Math.min(Math.max(props.ratedMarkerRate || 0, 0), 100)}%`
+))
+const ratedMarkerLabel = computed(() => `额定 ${formatHours(props.autoTargetHours)}h`)
+const progressText = computed(() => {
+  if (props.hasCustomTarget) {
+    return [
+      `实际 ${formatHours(props.completedHours)}h / 计划 ${formatHours(props.targetHours)}h`,
+      `额定 ${formatHours(props.autoTargetHours)}h`,
+      `剩余 ${formatHours(props.remainingHours)}h`,
+    ].join('，')
+  }
+
+  return `实际 ${formatHours(props.completedHours)}h / 额定 ${formatHours(props.targetHours)}h，剩余 ${formatHours(props.remainingHours)}h`
+})
 const toggleLabel = computed(() => (
   `${props.quarterLabel} ${collapsed.value ? '展开季度详情' : '收起季度详情'}`
 ))
-const targetModeText = computed(() => (props.hasCustomTarget ? '手动目标' : '自动目标'))
+const targetModeText = computed(() => (props.hasCustomTarget ? '手动计划' : '按额定时长'))
 const targetSourceText = computed(() => (
-  props.hasCustomTarget ? `手动设置为 ${formatHours(props.customTargetHours)}h` : '按季度工作日 × 1.36 自动计算'
+  props.hasCustomTarget ? `手动设置计划为 ${formatHours(props.customTargetHours)}h` : '未设置计划，满格按额定时长'
 ))
-const statusText = computed(() => (isComplete.value ? '已达标' : '冲刺中'))
 
 watch(
   () => props.targetHours,
@@ -150,6 +236,28 @@ watch(
 
 function formatHours(value) {
   return Number(value || 0).toFixed(1)
+}
+
+function selectQuarter(quarter) {
+  emitQuarterChange(props.queryYear, quarter)
+}
+
+function shiftYear(delta) {
+  emitQuarterChange(props.queryYear + delta, props.queryQuarter)
+}
+
+function emitQuarterChange(year, quarter) {
+  const numericYear = Number(year)
+  const numericQuarter = Number(quarter)
+
+  if (!Number.isInteger(numericYear) || numericQuarter < 1 || numericQuarter > 4) {
+    return
+  }
+
+  emit('change-quarter', {
+    year: numericYear,
+    quarter: numericQuarter,
+  })
 }
 
 function commitTarget(value) {
@@ -182,23 +290,120 @@ function restoreAutoTarget() {
   box-shadow: var(--shadow);
 }
 
-.summary-toggle {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 28px;
-  gap: 18px;
+.summary-header {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  width: 100%;
-  padding: 0;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.summary-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 10px 0 14px;
   color: var(--text);
-  text-align: left;
-  background: transparent;
-  border: 0;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 999px;
   cursor: pointer;
 }
 
-.summary-toggle:focus-visible {
+.summary-toggle:hover {
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 38%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 34%, var(--border));
+}
+
+.period-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 72%, transparent) inset;
+}
+
+.year-step,
+.quarter-button {
+  height: 32px;
+  color: var(--muted);
+  font-weight: 800;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.year-step {
+  width: 32px;
+  font-size: 0.9rem;
+}
+
+.year-value {
+  min-width: 76px;
+  padding: 0 6px;
+  color: var(--text);
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.switcher-divider {
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: color-mix(in srgb, var(--border) 90%, transparent);
+}
+
+.quarter-button {
+  min-width: 40px;
+  padding: 0 12px;
+}
+
+.year-step:hover,
+.quarter-button:hover,
+.quarter-button.is-active {
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-strong));
+}
+
+.summary-toggle:focus-visible,
+.year-step:focus-visible,
+.quarter-button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--brand) 54%, transparent);
-  outline-offset: 6px;
+  outline-offset: 3px;
+}
+
+.summary-title {
+  min-width: 180px;
+}
+
+.summary-title strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.summary-toggle:focus-visible {
+  outline-offset: 4px;
 }
 
 .summary-title,
@@ -226,28 +431,31 @@ function restoreAutoTarget() {
 
 .toggle-icon {
   position: relative;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+  transition: color 0.18s ease;
 }
 
 .toggle-icon::after {
   content: '';
   position: absolute;
-  left: 9px;
-  top: 8px;
-  width: 8px;
-  height: 8px;
-  border-right: 2px solid var(--muted);
-  border-bottom: 2px solid var(--muted);
+  left: 4px;
+  top: 3px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
   transform: rotate(45deg);
   transition: transform 0.2s ease, top 0.2s ease;
 }
 
+.summary-toggle:hover .toggle-icon {
+  color: var(--brand);
+}
+
 .is-expanded .toggle-icon::after {
-  top: 11px;
+  top: 6px;
   transform: rotate(225deg);
 }
 
@@ -275,15 +483,23 @@ function restoreAutoTarget() {
 
 .progress-track {
   display: block;
+  position: relative;
   height: 12px;
-  overflow: hidden;
+  margin-top: 4px;
+  overflow: visible;
   border-radius: 999px;
   background: var(--track-bg);
+}
+
+.progress-track.has-rated-marker {
+  margin-top: 12px;
+  margin-bottom: 22px;
 }
 
 .progress-fill {
   display: block;
   position: relative;
+  z-index: 1;
   height: 100%;
   min-width: 0;
   overflow: hidden;
@@ -332,6 +548,70 @@ function restoreAutoTarget() {
 .is-complete .progress-fill::before,
 .is-complete .progress-fill::after {
   display: none;
+}
+
+.rated-marker {
+  position: absolute;
+  top: -10px;
+  bottom: -8px;
+  z-index: 2;
+  width: 2px;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.rated-marker::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  width: 0;
+  height: 0;
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-top: 10px solid color-mix(in srgb, var(--warning) 58%, var(--text));
+  transform: translateX(-50%);
+}
+
+.rated-marker::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 8px;
+  left: 50%;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning) 70%, var(--text));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--surface) 82%, transparent);
+  transform: translateX(-50%);
+}
+
+.rated-marker-label {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 4px);
+  padding: 3px 7px;
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  border: 1px solid color-mix(in srgb, var(--warning) 44%, var(--border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning-soft) 72%, var(--surface));
+  transform: translateX(-50%);
+}
+
+.rated-marker.is-overflow .rated-marker-label {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.progress-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 
 .summary-fold {
@@ -516,8 +796,42 @@ function restoreAutoTarget() {
     border-radius: 22px;
   }
 
+  .summary-header,
+  .summary-actions {
+    align-items: stretch;
+  }
+
+  .summary-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
   .summary-toggle {
-    gap: 10px 12px;
+    width: 100%;
+  }
+
+  .period-switcher {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+    border-radius: 18px;
+  }
+
+  .year-step {
+    flex: 0 0 36px;
+  }
+
+  .year-value {
+    flex: 1 1 120px;
+  }
+
+  .switcher-divider {
+    display: none;
+  }
+
+  .quarter-button {
+    flex: 1 1 56px;
   }
 
   .detail-metrics {
@@ -553,6 +867,18 @@ function restoreAutoTarget() {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
+  }
+
+  .progress-track {
+    margin-top: 4px;
+  }
+
+  .progress-track.has-rated-marker {
+    margin-bottom: 0;
+  }
+
+  .rated-marker-label {
+    display: none;
   }
 }
 </style>

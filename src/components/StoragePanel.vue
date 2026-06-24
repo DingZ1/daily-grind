@@ -1,10 +1,14 @@
 <template>
   <section class="storage-panel">
     <div class="storage-copy">
-      <div class="storage-label-row">
+      <div class="storage-heading">
+        <span class="storage-status-pill" :class="`is-${statusTone}`">
+          <span class="status-dot" aria-hidden="true"></span>
+          {{ statusBadgeText }}
+        </span>
         <el-tooltip content="如何永久保存数据？" placement="top">
           <button
-            class="storage-help-button"
+            class="storage-help-link"
             type="button"
             aria-label="如何永久保存数据？"
             @click="helpOpen = true"
@@ -12,9 +16,9 @@
             <el-icon>
               <QuestionFilled />
             </el-icon>
+            <span>保存说明</span>
           </button>
         </el-tooltip>
-        <p class="storage-label">数据保存</p>
       </div>
       <h3>{{ statusTitle }}</h3>
       <p>{{ statusDescription }}</p>
@@ -96,6 +100,24 @@ const isBusy = computed(() => props.storage.status === 'checking' || props.stora
 const hasFile = computed(() => Boolean(props.storage.fileName))
 const helpOpen = ref(false)
 
+const statusTone = computed(() => {
+  if (!props.storage.supported || props.storage.status === 'unsupported') return 'muted'
+  if (props.storage.status === 'ready') return 'ready'
+  if (props.storage.status === 'syncing' || props.storage.status === 'checking') return 'busy'
+  if (props.storage.status === 'needs-permission' || props.storage.status === 'error') return 'warning'
+  return 'muted'
+})
+
+const statusBadgeText = computed(() => {
+  if (!props.storage.supported || props.storage.status === 'unsupported') return '仅浏览器缓存'
+  if (props.storage.status === 'checking') return '检查中'
+  if (props.storage.status === 'syncing') return '同步中'
+  if (props.storage.status === 'ready') return 'JSON 已绑定'
+  if (props.storage.status === 'needs-permission') return '需要授权'
+  if (props.storage.status === 'error') return '同步异常'
+  return '未绑定 JSON'
+})
+
 const statusTitle = computed(() => {
   if (!props.storage.supported || props.storage.status === 'unsupported') {
     return '当前使用浏览器缓存'
@@ -153,49 +175,83 @@ const statusDescription = computed(() => {
   min-width: 0;
 }
 
-.storage-label-row {
+.storage-heading {
   display: flex;
-  gap: 7px;
+  gap: 10px;
   align-items: center;
-  margin: 0 0 6px;
+  margin: 0 0 8px;
+  flex-wrap: wrap;
 }
 
-.storage-help-button {
+.storage-status-pill {
   display: inline-flex;
-  width: 24px;
-  height: 24px;
   align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--brand-strong);
-  background: color-mix(in srgb, var(--brand-soft) 55%, transparent);
-  border: 1px solid color-mix(in srgb, var(--brand) 36%, var(--border));
-  border-radius: 50%;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+  border: 1px solid color-mix(in srgb, var(--border) 86%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.storage-status-pill.is-ready {
+  color: color-mix(in srgb, var(--accent) 62%, var(--text));
+  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
+  background: color-mix(in srgb, var(--accent-soft) 58%, var(--surface));
+}
+
+.storage-status-pill.is-busy {
+  color: color-mix(in srgb, var(--brand) 62%, var(--text));
+  border-color: color-mix(in srgb, var(--brand) 28%, var(--border));
+  background: color-mix(in srgb, var(--brand-soft) 54%, var(--surface));
+}
+
+.storage-status-pill.is-warning {
+  color: color-mix(in srgb, var(--warning) 58%, var(--text));
+  border-color: color-mix(in srgb, var(--warning) 36%, var(--border));
+  background: color-mix(in srgb, var(--warning-soft) 48%, var(--surface));
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.storage-help-link {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
   cursor: pointer;
 }
 
-.storage-help-button:hover,
-.storage-help-button:focus-visible {
-  color: #fff;
-  background: var(--brand-strong);
+.storage-help-link:hover,
+.storage-help-link:focus-visible {
+  color: var(--brand);
   outline: none;
 }
 
-.storage-label,
 .storage-copy p {
   color: var(--muted);
-}
-
-.storage-label {
-  margin: 0;
-  font-size: 0.84rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .storage-copy h3 {
   margin: 0;
   color: var(--text);
+  font-size: 1.08rem;
+  line-height: 1.35;
 }
 
 .storage-copy p {

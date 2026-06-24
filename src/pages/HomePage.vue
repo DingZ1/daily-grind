@@ -3,6 +3,8 @@
     <main class="page-shell">
       <QuarterSummary
         :quarter-label="quarterLabel"
+        :query-year="queryYear"
+        :query-quarter="queryQuarter"
         :auto-target-hours="autoTargetHours"
         :target-hours="targetHours"
         :custom-target-hours="customTargetHours"
@@ -10,6 +12,9 @@
         :completed-hours="completedHours"
         :remaining-hours="remainingHours"
         :completion-rate="completionRate"
+        :rated-marker-rate="ratedMarkerRate"
+        :rated-marker-overflow="ratedMarkerOverflow"
+        @change-quarter="changeQuarter"
         @update-target="updateQuarterTarget"
         @clear-target="clearQuarterTarget"
       />
@@ -216,6 +221,8 @@ const {
   completedHours,
   remainingHours,
   completionRate,
+  ratedMarkerRate,
+  ratedMarkerOverflow,
   quarterInfo,
 } = useQuarterStats(quarterReferenceDate)
 const editorOpen = ref(false)
@@ -226,6 +233,8 @@ const deleteJsonOpen = ref(false)
 const deletingJson = ref(false)
 
 const monthInput = computed(() => viewMonth.value.format('YYYY-MM'))
+const queryYear = computed(() => quarterInfo.value.year)
+const queryQuarter = computed(() => quarterInfo.value.quarter)
 const todayDateParts = computed(() => {
   const today = dayjs()
 
@@ -370,6 +379,19 @@ function openEditor(date) {
 function jumpToDate(date) {
   if (!date) return
   selectedDate.value = date
+}
+
+function changeQuarter({ year, quarter }) {
+  const nextYear = Number(year)
+  const nextQuarter = Number(quarter)
+
+  if (!Number.isInteger(nextYear) || nextQuarter < 1 || nextQuarter > 4) {
+    return
+  }
+
+  const nextDate = dayjs(new Date(nextYear, (nextQuarter - 1) * 3, 1))
+  viewMonth.value = nextDate.startOf('month')
+  selectedDate.value = nextDate.format('YYYY-MM-DD')
 }
 
 function saveRecord(form) {
