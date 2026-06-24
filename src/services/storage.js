@@ -1,5 +1,6 @@
 const STORAGE_KEY = 'daily-grind-store'
-const DATA_VERSION = 2
+const DATA_VERSION = 3
+const SOFT_THEME_DEFAULT_VERSION = 3
 const DB_NAME = 'daily-grind-file-handles'
 const DB_VERSION = 1
 const HANDLE_STORE = 'handles'
@@ -8,6 +9,14 @@ const DEFAULT_FILE_NAME = 'daily-grind-data.json'
 
 let activeFileHandle = null
 let writeQueue = Promise.resolve()
+
+function normalizeTheme(payload) {
+  if (payload.theme === 'auto' && Number(payload.version || 1) < SOFT_THEME_DEFAULT_VERSION) {
+    return 'soft'
+  }
+
+  return payload.theme || undefined
+}
 
 function createStoreSnapshot(payload) {
   return {
@@ -31,7 +40,7 @@ function extractStorePayload(payload) {
     settings: payload.settings || undefined,
     records: payload.records || {},
     quarterTargets: payload.quarterTargets || {},
-    theme: payload.theme || undefined,
+    theme: normalizeTheme(payload),
   }
 }
 
