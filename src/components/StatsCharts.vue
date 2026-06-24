@@ -20,8 +20,8 @@
         <svg class="trend-svg" viewBox="0 0 320 220" preserveAspectRatio="none" aria-hidden="true">
           <defs>
             <linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stop-color="rgba(255, 127, 80, 0.34)" />
-              <stop offset="100%" stop-color="rgba(255, 127, 80, 0.02)" />
+              <stop class="trend-fill-start" offset="0%" />
+              <stop class="trend-fill-end" offset="100%" />
             </linearGradient>
           </defs>
           <path class="grid-line" d="M 20 20 H 300" />
@@ -329,6 +329,14 @@ const weekendDash = computed(() => (weekendPercent.value / 100) * circumference)
   transition: all 0.25s ease;
 }
 
+.trend-fill-start {
+  stop-color: var(--trend-fill-start);
+}
+
+.trend-fill-end {
+  stop-color: var(--trend-fill-end);
+}
+
 .point-dot {
   fill: #ffffff;
   stroke: var(--brand);
@@ -374,7 +382,7 @@ const weekendDash = computed(() => (weekendPercent.value / 100) * circumference)
   width: 100%;
   min-height: 10px;
   border-radius: 18px;
-  background: linear-gradient(180deg, #54d3c2, #2ec4b6);
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
   box-shadow: inset 0 -8px 18px rgba(255, 255, 255, 0.24);
   transition: height 0.35s ease;
 }
@@ -427,7 +435,7 @@ const weekendDash = computed(() => (weekendPercent.value / 100) * circumference)
 }
 
 .donut-segment.weekend {
-  stroke: #2ec4b6;
+  stroke: var(--accent);
 }
 
 .donut-center {
@@ -481,7 +489,7 @@ const weekendDash = computed(() => (weekendPercent.value / 100) * circumference)
 }
 
 .legend-dot.weekend {
-  background: #2ec4b6;
+  background: var(--accent);
 }
 
 @media (max-width: 1080px) {

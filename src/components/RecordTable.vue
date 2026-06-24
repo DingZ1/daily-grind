@@ -9,12 +9,12 @@
         <input
           ref="fileInputRef"
           type="file"
-          accept=".csv,text/csv"
+          accept=".xlsx,.xlsm,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
           class="file-input"
           @change="handleFileChange"
         />
-        <button class="ghost-button" type="button" @click="triggerImport">导入 CSV</button>
-        <button class="primary-button" type="button" @click="$emit('export-records')">导出 CSV</button>
+        <button class="ghost-button" type="button" @click="triggerImport">导入 Excel/CSV</button>
+        <button class="primary-button" type="button" @click="$emit('export-records')">导出 Excel</button>
       </div>
     </div>
     <div class="table-wrap">

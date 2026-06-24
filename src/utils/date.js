@@ -46,6 +46,11 @@ export function getQuarterInfo(date) {
   }
 }
 
+export function getQuarterKey(date) {
+  const { year, quarter } = getQuarterInfo(date)
+  return `${year}-Q${quarter}`
+}
+
 export function getQuarterTargetHours(date) {
   const { start, end } = getQuarterInfo(date)
   let workdayCount = 0

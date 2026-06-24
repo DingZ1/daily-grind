@@ -3,88 +3,89 @@
     <div class="toolbar">
       <div class="toolbar-top">
         <div class="hero-copy">
-          <p class="toolbar-label">当前视图</p>
-          <strong>{{ monthLabel }}</strong>
-          <p class="toolbar-subtitle">快速切月、定位日期、调整公司口径，都集中在这里。</p>
-        </div>
-        <div class="toolbar-actions">
-          <el-button round @click="$emit('previous-month')">上个月</el-button>
-          <el-button type="primary" round @click="$emit('next-month')">下个月</el-button>
-        </div>
-      </div>
-
-      <div class="quick-strip">
-        <div class="quick-chip">
-          <span>浏览月份</span>
-          <strong>{{ monthInput }}</strong>
-        </div>
-        <div class="quick-chip">
-          <span>当前日期</span>
-          <strong>{{ dateInput }}</strong>
-        </div>
-        <div class="quick-chip">
-          <span>基准工时</span>
-          <strong>{{ settings.workdayStart }} - {{ settings.workdayEnd }}</strong>
-        </div>
-      </div>
-
-      <div class="controls-panel">
-        <div class="control-group">
-          <p class="group-title">日期定位</p>
-          <div class="controls controls-two">
-            <div class="control-item">
-              <span>跳转月份</span>
-              <el-date-picker
-                :model-value="monthInput"
-                type="month"
-                value-format="YYYY-MM"
-                placeholder="选择月份"
-                @update:model-value="$emit('jump-month', $event)"
-              />
-            </div>
-            <div class="control-item">
-              <span>跳转日期</span>
-              <el-date-picker
-                :model-value="dateInput"
-                type="date"
-                value-format="YYYY-MM-DD"
-                placeholder="选择日期"
-                @update:model-value="$emit('jump-date', $event)"
-              />
-            </div>
+          <p class="toolbar-label">当前时间</p>
+          <div class="today-date" aria-label="今天日期">
+            <span class="date-highlight">{{ todayDateParts.year }} 年</span>
+            <span class="date-highlight">{{ todayDateParts.month }} 月</span>
+            <span>{{ todayDateParts.day }} 日</span>
           </div>
         </div>
+        <div class="toolbar-actions">
+          <button
+            class="toolbar-toggle"
+            type="button"
+            :aria-expanded="String(!collapsed)"
+            :aria-label="collapsed ? '展开视图设置' : '收起视图设置'"
+            @click="collapsed = !collapsed"
+          >
+            <span aria-hidden="true"></span>
+          </button>
+        </div>
+      </div>
 
-        <div class="control-group">
-          <p class="group-title">公司口径</p>
-          <div class="controls controls-three">
-            <div class="control-item">
-              <span>标准上班</span>
-              <el-time-select
-                :model-value="settings.workdayStart"
-                start="06:00"
-                step="00:30"
-                end="12:00"
-                @update:model-value="updateField('workdayStart', $event)"
-              />
+      <div
+        class="toolbar-fold-shell"
+        :class="{ 'is-open': !collapsed }"
+        :aria-hidden="String(collapsed)"
+        :inert="collapsed"
+      >
+        <div class="toolbar-fold">
+          <p class="toolbar-subtitle">定位日期、调整公司口径，都集中在这里。</p>
+
+          <div class="controls-panel">
+            <div class="control-group">
+              <p class="group-title">日期定位</p>
+              <div class="controls controls-one">
+                <div class="control-item">
+                  <span>跳转日期</span>
+                  <el-date-picker
+                    :model-value="dateInput"
+                    type="date"
+                    value-format="YYYY-MM-DD"
+                    placeholder="选择日期"
+                    @update:model-value="$emit('jump-date', $event)"
+                  />
+                </div>
+              </div>
             </div>
-            <div class="control-item">
-              <span>标准下班</span>
-              <el-time-select
-                :model-value="settings.workdayEnd"
-                start="16:00"
-                step="00:30"
-                end="22:00"
-                @update:model-value="updateField('workdayEnd', $event)"
-              />
-            </div>
-            <div class="control-item theme-item">
-              <span>主题模式</span>
-              <el-select :model-value="theme" @update:model-value="$emit('change-theme', $event)">
-                <el-option label="跟随系统" value="auto" />
-                <el-option label="浅色" value="light" />
-                <el-option label="暗色" value="dark" />
-              </el-select>
+
+            <div class="control-group">
+              <p class="group-title">公司口径</p>
+              <div class="controls controls-four">
+                <div class="control-item">
+                  <span>标准上班</span>
+                  <el-time-select
+                    :model-value="settings.workdayStart"
+                    start="06:00"
+                    step="00:30"
+                    end="12:00"
+                    @update:model-value="updateField('workdayStart', $event)"
+                  />
+                </div>
+                <div class="control-item">
+                  <span>标准下班</span>
+                  <el-time-select
+                    :model-value="settings.workdayEnd"
+                    start="16:00"
+                    step="00:30"
+                    end="22:00"
+                    @update:model-value="updateField('workdayEnd', $event)"
+                  />
+                </div>
+                <div class="control-item baseline-item">
+                  <span>基准工时</span>
+                  <div class="readonly-value">{{ settings.workdayStart }} - {{ settings.workdayEnd }}</div>
+                </div>
+                <div class="control-item theme-item">
+                  <span>主题模式</span>
+                  <el-select :model-value="theme" @update:model-value="$emit('change-theme', $event)">
+                    <el-option label="跟随系统" value="auto" />
+                    <el-option label="浅色" value="light" />
+                    <el-option label="柔和" value="soft" />
+                    <el-option label="暗色" value="dark" />
+                  </el-select>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -94,22 +95,22 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+
 defineProps({
-  monthLabel: String,
-  monthInput: String,
+  todayDateParts: Object,
   dateInput: String,
   settings: Object,
   theme: String,
 })
 
 const emit = defineEmits([
-  'previous-month',
-  'next-month',
-  'jump-month',
   'jump-date',
   'update-settings',
   'change-theme',
 ])
+
+const collapsed = ref(true)
 
 function updateField(field, value) {
   emit('update-settings', { [field]: value })
@@ -128,7 +129,7 @@ function updateField(field, value) {
 
 .toolbar {
   display: grid;
-  gap: 18px;
+  gap: 0;
 }
 
 .toolbar-top {
@@ -139,17 +140,10 @@ function updateField(field, value) {
   flex-wrap: wrap;
 }
 
-.hero-copy strong {
-  display: block;
-  font-size: 2rem;
-  line-height: 1.05;
-}
-
 .toolbar-label,
 .control-item span,
 .group-title,
-.toolbar-subtitle,
-.quick-chip span {
+.toolbar-subtitle {
   color: var(--muted);
   font-size: 0.88rem;
 }
@@ -158,6 +152,24 @@ function updateField(field, value) {
   margin: 0 0 6px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+.today-date {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--text);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.date-highlight {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--brand-soft) 58%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand) 12%, transparent) inset;
 }
 
 .toolbar-subtitle {
@@ -171,33 +183,50 @@ function updateField(field, value) {
   align-items: center;
 }
 
-.quick-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.quick-chip {
-  padding: 14px 16px;
-  border-radius: 18px;
+.toolbar-toggle {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--muted);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 92%, transparent);
+  cursor: pointer;
 }
 
-.quick-chip span,
-.quick-chip strong {
-  display: block;
+.toolbar-toggle span {
+  position: absolute;
+  left: 11px;
+  top: 10px;
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 0.2s ease, top 0.2s ease;
 }
 
-.quick-chip strong {
-  margin-top: 6px;
-  font-size: 1rem;
-  color: var(--text);
+.toolbar-toggle[aria-expanded='true'] span {
+  top: 13px;
+  transform: rotate(225deg);
+}
+
+.toolbar-toggle:hover,
+.toolbar-toggle:focus-visible {
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand-soft) 44%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand) 38%, var(--border));
+}
+
+.toolbar-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--brand) 54%, transparent);
+  outline-offset: 3px;
 }
 
 .controls-panel {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.35fr);
+  grid-template-columns: minmax(220px, 0.75fr) minmax(0, 1.7fr);
   gap: 14px;
 }
 
@@ -219,17 +248,28 @@ function updateField(field, value) {
   align-items: end;
 }
 
-.controls-two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.controls-one {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.controls-three {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.controls-four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .control-item {
   display: grid;
   gap: 8px;
+}
+
+.readonly-value {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 14px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: 0 0 0 1px var(--border) inset;
 }
 
 .theme-item {
@@ -244,6 +284,40 @@ function updateField(field, value) {
   box-shadow: 0 0 0 1px var(--border) inset;
 }
 
+.toolbar-fold-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  overflow: hidden;
+  transform: translate3d(0, -4px, 0);
+  transition:
+    grid-template-rows 320ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease,
+    transform 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: grid-template-rows, opacity, transform;
+}
+
+.toolbar-fold-shell.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.toolbar-fold {
+  display: grid;
+  gap: 18px;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 18px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-toggle span,
+  .toolbar-fold-shell {
+    transition: none;
+  }
+}
+
 @media (max-width: 1180px) {
   .controls-panel {
     grid-template-columns: 1fr;
@@ -251,32 +325,28 @@ function updateField(field, value) {
 }
 
 @media (max-width: 960px) {
-  .quick-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .controls-three {
+  .controls-four {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
-  .hero-copy strong {
+  .today-date {
     font-size: 1.6rem;
   }
 
-  .quick-strip,
-  .controls-two,
-  .controls-three {
+  .controls-one,
+  .controls-four {
     grid-template-columns: 1fr;
   }
 
   .toolbar-actions {
-    width: 100%;
+    width: auto;
+    margin-left: auto;
   }
 
-  .toolbar-actions :deep(.el-button) {
-    flex: 1;
+  .toolbar-toggle {
+    flex: 0 0 34px;
   }
 }
 </style>

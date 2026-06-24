@@ -93,7 +93,7 @@ const statusLabel = computed(() => {
 }
 
 .day-cell.invalid {
-  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, #ffd6a5 42%, var(--panel)));
+  background: linear-gradient(180deg, var(--panel), color-mix(in srgb, var(--warning-soft) 42%, var(--panel)));
 }
 
 .day-header {

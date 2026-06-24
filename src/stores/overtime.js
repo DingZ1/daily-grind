@@ -1,9 +1,20 @@
 import { defineStore } from 'pinia'
 import dayjs from 'dayjs'
-import { loadStore, saveStore } from '../services/storage'
+import {
+  bindDataFile,
+  createDataFile,
+  disconnectDataFile,
+  isFileStorageSupported,
+  loadBoundStoreFile,
+  loadStore,
+  previewDataFile,
+  reconnectBoundStoreFile,
+  saveStore,
+  syncBoundStoreFile,
+} from '../services/storage'
 import { buildRecordPayload } from '../utils/overtime'
 import { getDayKind } from '../utils/holiday'
-import { formatDate } from '../utils/date'
+import { formatDate, getQuarterKey } from '../utils/date'
 import { DAY_KIND_LABELS } from '../constants/rules'
 
 function createDefaultState() {
@@ -13,8 +24,23 @@ function createDefaultState() {
       workdayEnd: '18:00',
     },
     records: {},
-    theme: 'auto',
+    quarterTargets: {},
+    theme: 'soft',
   }
+}
+
+function createStorageState() {
+  return {
+    supported: isFileStorageSupported(),
+    status: 'checking',
+    fileName: '',
+    lastSyncedAt: '',
+    error: '',
+  }
+}
+
+function getErrorMessage(error, fallback = '操作失败，请稍后重试。') {
+  return error?.message || fallback
 }
 
 function normalizeRecord(record) {
@@ -30,6 +56,19 @@ function normalizeRecord(record) {
 function normalizeRecords(records) {
   return Object.entries(records || {}).reduce((map, [date, record]) => {
     map[date] = normalizeRecord(record)
+    return map
+  }, {})
+}
+
+function normalizeQuarterTargets(quarterTargets) {
+  return Object.entries(quarterTargets || {}).reduce((map, [quarterKey, hours]) => {
+    const numericHours = Number(hours)
+
+    if (!quarterKey || !Number.isFinite(numericHours) || numericHours < 0) {
+      return map
+    }
+
+    map[quarterKey] = Number(numericHours.toFixed(1))
     return map
   }, {})
 }
@@ -57,6 +96,7 @@ export const useOvertimeStore = defineStore('overtime', {
   state: () => ({
     ...createDefaultState(),
     loaded: false,
+    storage: createStorageState(),
   }),
   getters: {
     recordList(state) {
@@ -64,24 +104,204 @@ export const useOvertimeStore = defineStore('overtime', {
     },
   },
   actions: {
-    initialize() {
+    applyPayload(saved) {
+      if (!saved) return
+
+      this.settings = {
+        ...this.settings,
+        ...(saved.settings || {}),
+      }
+      this.records = normalizeRecords(saved.records)
+      this.quarterTargets = normalizeQuarterTargets(saved.quarterTargets)
+      this.theme = saved.theme || this.theme
+    },
+    buildPersistPayload() {
+      return {
+        settings: this.settings,
+        records: this.records,
+        quarterTargets: this.quarterTargets,
+        theme: this.theme,
+      }
+    },
+    async initialize() {
       if (this.loaded) return
 
       const saved = loadStore()
-      if (saved) {
-        this.settings = saved.settings || this.settings
-        this.records = normalizeRecords(saved.records)
-        this.theme = saved.theme || this.theme
+      this.applyPayload(saved)
+      this.loaded = true
+
+      this.storage.supported = isFileStorageSupported()
+
+      if (!this.storage.supported) {
+        this.storage.status = 'unsupported'
+        return
       }
 
-      this.loaded = true
+      this.storage.status = 'checking'
+
+      const fileResult = await loadBoundStoreFile()
+
+      if (fileResult.status === 'ready') {
+        this.applyPayload(fileResult.payload)
+        saveStore(this.buildPersistPayload())
+        this.storage.status = 'ready'
+        this.storage.fileName = fileResult.fileName
+        this.storage.error = ''
+        return
+      }
+
+      if (fileResult.status === 'needs-permission') {
+        this.storage.status = 'needs-permission'
+        this.storage.fileName = fileResult.fileName
+        this.storage.error = ''
+        return
+      }
+
+      if (fileResult.status === 'error') {
+        this.storage.status = 'error'
+        this.storage.fileName = fileResult.fileName
+        this.storage.error = getErrorMessage(fileResult.error, '读取 JSON 数据文件失败。')
+        return
+      }
+
+      this.storage.status = 'cache-only'
     },
     persist() {
-      saveStore({
-        settings: this.settings,
-        records: this.records,
-        theme: this.theme,
-      })
+      const payload = this.buildPersistPayload()
+
+      saveStore(payload)
+
+      if (this.storage.status === 'ready' || this.storage.status === 'syncing') {
+        void this.syncStorageFile(payload).catch(() => {})
+      }
+    },
+    async createStorageFile() {
+      if (!this.storage.supported) {
+        throw new Error('当前浏览器不支持直接保存 JSON 数据文件。')
+      }
+
+      const previousStorage = { ...this.storage }
+      this.storage.status = 'syncing'
+      this.storage.error = ''
+
+      try {
+        const result = await createDataFile(this.buildPersistPayload())
+
+        this.storage.status = 'ready'
+        this.storage.fileName = result.fileName
+        this.storage.lastSyncedAt = result.savedAt
+        this.storage.error = ''
+        return result
+      } catch (error) {
+        this.storage = {
+          ...previousStorage,
+          error: error?.name === 'AbortError' ? previousStorage.error : getErrorMessage(error),
+        }
+        throw error
+      }
+    },
+    async previewStorageFile() {
+      if (!this.storage.supported) {
+        throw new Error('当前浏览器不支持直接打开 JSON 数据文件。')
+      }
+
+      return previewDataFile()
+    },
+    async openStorageFile(filePreview) {
+      if (!this.storage.supported) {
+        throw new Error('当前浏览器不支持直接打开 JSON 数据文件。')
+      }
+
+      if (!filePreview?.handle || !filePreview?.payload) {
+        throw new Error('没有可打开的 JSON 数据文件。')
+      }
+
+      const previousStorage = { ...this.storage }
+      const previousPayload = this.buildPersistPayload()
+      this.storage.status = 'syncing'
+      this.storage.error = ''
+
+      try {
+        this.applyPayload(filePreview.payload)
+        const payload = this.buildPersistPayload()
+        const result = await bindDataFile(filePreview.handle, payload)
+
+        saveStore(payload)
+
+        this.storage.status = 'ready'
+        this.storage.fileName = result.fileName
+        this.storage.lastSyncedAt = result.savedAt
+        this.storage.error = ''
+        return {
+          ...result,
+          payload,
+        }
+      } catch (error) {
+        this.applyPayload(previousPayload)
+        saveStore(previousPayload)
+        this.storage = {
+          ...previousStorage,
+          error: error?.name === 'AbortError' ? previousStorage.error : getErrorMessage(error),
+        }
+        throw error
+      }
+    },
+    async reconnectStorageFile() {
+      if (!this.storage.supported) {
+        throw new Error('当前浏览器不支持直接保存 JSON 数据文件。')
+      }
+
+      this.storage.status = 'syncing'
+      this.storage.error = ''
+
+      const result = await reconnectBoundStoreFile()
+
+      if (result.status === 'ready') {
+        this.applyPayload(result.payload)
+        saveStore(this.buildPersistPayload())
+        this.storage.status = 'ready'
+        this.storage.fileName = result.fileName
+        this.storage.error = ''
+        return result
+      }
+
+      if (result.status === 'needs-permission') {
+        this.storage.status = 'needs-permission'
+        this.storage.fileName = result.fileName
+        return result
+      }
+
+      this.storage.status = 'cache-only'
+      this.storage.fileName = ''
+      return result
+    },
+    async syncStorageFile(payload = this.buildPersistPayload()) {
+      if (!this.storage.supported || !this.storage.fileName) return null
+
+      this.storage.status = 'syncing'
+      this.storage.error = ''
+
+      try {
+        const result = await syncBoundStoreFile(payload)
+
+        this.storage.status = 'ready'
+        this.storage.fileName = result.fileName
+        this.storage.lastSyncedAt = result.savedAt
+        this.storage.error = ''
+        return result
+      } catch (error) {
+        this.storage.status = error?.name === 'NotAllowedError' ? 'needs-permission' : 'error'
+        this.storage.error = getErrorMessage(error, '同步 JSON 数据文件失败。')
+        throw error
+      }
+    },
+    async disconnectStorageFile() {
+      await disconnectDataFile()
+
+      this.storage.status = this.storage.supported ? 'cache-only' : 'unsupported'
+      this.storage.fileName = ''
+      this.storage.lastSyncedAt = ''
+      this.storage.error = ''
     },
     saveRecord(form) {
       const date = formatDate(form.date)
@@ -167,6 +387,32 @@ export const useOvertimeStore = defineStore('overtime', {
         ...this.settings,
         ...nextSettings,
       }
+      this.persist()
+    },
+    updateQuarterTarget(referenceDate, hours) {
+      const numericHours = Number(hours)
+
+      if (!Number.isFinite(numericHours) || numericHours < 0) {
+        return
+      }
+
+      this.quarterTargets = {
+        ...this.quarterTargets,
+        [getQuarterKey(referenceDate)]: Number(numericHours.toFixed(1)),
+      }
+      this.persist()
+    },
+    clearQuarterTarget(referenceDate) {
+      const quarterKey = getQuarterKey(referenceDate)
+
+      if (!Object.prototype.hasOwnProperty.call(this.quarterTargets, quarterKey)) {
+        return
+      }
+
+      const nextQuarterTargets = { ...this.quarterTargets }
+      delete nextQuarterTargets[quarterKey]
+
+      this.quarterTargets = nextQuarterTargets
       this.persist()
     },
     updateTheme(theme) {
