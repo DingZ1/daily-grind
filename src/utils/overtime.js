@@ -1,5 +1,6 @@
 import dayjs from 'dayjs'
 import { OVERTIME_RULES } from '../constants/rules'
+import { isAttendanceDay, normalizeAttendanceSegments } from './attendance'
 
 function parseTimeToMinutes(time) {
   if (!time) return null
@@ -153,7 +154,7 @@ export function buildOvertimePreviewText(explanation) {
   return parts.join('，')
 }
 
-export function buildRecordPayload({ date, dayKind, startTime, endTime, note, settings }) {
+export function buildRecordPayload({ date, dayKind, startTime, endTime, note, attendanceSegments, settings }) {
   const overtimeHours = calculateOvertimeHours({ dayKind, startTime, endTime, settings })
 
   return {
@@ -161,6 +162,7 @@ export function buildRecordPayload({ date, dayKind, startTime, endTime, note, se
     dayKind,
     startTime,
     endTime,
+    attendanceSegments: isAttendanceDay(dayKind) ? normalizeAttendanceSegments(attendanceSegments) : [],
     note: note || '',
     overtimeHours,
     status: overtimeHours >= OVERTIME_RULES.minimumEffectiveHours ? 'valid' : 'invalid',

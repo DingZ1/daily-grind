@@ -16,6 +16,13 @@ import { buildRecordPayload } from '../utils/overtime'
 import { getDayKind } from '../utils/holiday'
 import { formatDate, getQuarterKey } from '../utils/date'
 import { DAY_KIND_LABELS } from '../constants/rules'
+import {
+  isAttendanceDay,
+  isValidClockTime,
+  normalizeAttendanceSegments,
+  parseAttendanceSegmentsText,
+  validateAttendanceSegments,
+} from '../utils/attendance'
 
 function createDefaultState() {
   return {
@@ -43,11 +50,17 @@ function getErrorMessage(error, fallback = '操作失败，请稍后重试。') 
   return error?.message || fallback
 }
 
-function normalizeRecord(record) {
+function normalizeRecord(record, date) {
   if (!record) return record
+  const dayKind = normalizeDayKind(record.dayKind, record.date || date)
 
   return {
     ...record,
+    date: record.date || date,
+    dayKind,
+    attendanceSegments: isAttendanceDay(dayKind)
+      ? normalizeAttendanceSegments(record.attendanceSegments)
+      : [],
     note: record.note || '',
     status: record.status || (record.overtimeHours >= 1 ? 'valid' : 'invalid'),
   }
@@ -55,7 +68,7 @@ function normalizeRecord(record) {
 
 function normalizeRecords(records) {
   return Object.entries(records || {}).reduce((map, [date, record]) => {
-    map[date] = normalizeRecord(record)
+    map[date] = normalizeRecord(record, date)
     return map
   }, {})
 }
@@ -86,10 +99,6 @@ function normalizeDayKind(dayKind, date) {
 
 function isValidDate(value) {
   return dayjs(value).isValid()
-}
-
-function isValidTime(value) {
-  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) || value === '24:00'
 }
 
 export const useOvertimeStore = defineStore('overtime', {
@@ -310,6 +319,7 @@ export const useOvertimeStore = defineStore('overtime', {
         dayKind: form.dayKind || getDayKind(date),
         startTime: form.startTime,
         endTime: form.endTime,
+        attendanceSegments: form.attendanceSegments,
         note: form.note,
         settings: this.settings,
       })
@@ -342,18 +352,32 @@ export const useOvertimeStore = defineStore('overtime', {
           return
         }
 
-        if (!isValidTime(startTime) || !isValidTime(endTime)) {
+        if (!isValidClockTime(startTime) || !isValidClockTime(endTime)) {
           skipped += 1
           errors.push(`第 ${rowNumber} 行时间格式无效。`)
           return
         }
 
         const date = formatDate(rawDate)
+        const dayKind = normalizeDayKind(row.dayKind || row.dayKindLabel, date)
+        const attendanceValidation = validateAttendanceSegments(
+          isAttendanceDay(dayKind)
+            ? parseAttendanceSegmentsText(row.attendanceSegments)
+            : [],
+        )
+
+        if (!attendanceValidation.valid) {
+          skipped += 1
+          errors.push(`第 ${rowNumber} 行${attendanceValidation.message}`)
+          return
+        }
+
         const payload = buildRecordPayload({
           date,
-          dayKind: normalizeDayKind(row.dayKind || row.dayKindLabel, date),
+          dayKind,
           startTime,
           endTime,
+          attendanceSegments: attendanceValidation.segments,
           note: row.note || '',
           settings: this.settings,
         })

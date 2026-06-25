@@ -1,5 +1,5 @@
 const STORAGE_KEY = 'daily-grind-store'
-const DATA_VERSION = 3
+const DATA_VERSION = 4
 const SOFT_THEME_DEFAULT_VERSION = 3
 const DB_NAME = 'daily-grind-file-handles'
 const DB_VERSION = 1

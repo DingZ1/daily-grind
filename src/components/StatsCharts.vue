@@ -4,49 +4,6 @@
       <template #header>
         <div class="card-head">
           <div>
-            <h3>本月日加班趋势</h3>
-            <p>按天查看当前月份的有效加班时长变化。</p>
-          </div>
-          <el-tag round effect="plain">Trend</el-tag>
-        </div>
-      </template>
-      <el-empty v-if="!monthlyRecords.length" description="这个月还没有记录" :image-size="88" />
-      <div v-else class="chart trend-chart">
-        <div class="chart-scale">
-          <span>{{ maxTrendHours.toFixed(1) }}h</span>
-          <span>{{ midTrendHours.toFixed(1) }}h</span>
-          <span>0h</span>
-        </div>
-        <svg class="trend-svg" viewBox="0 0 320 220" preserveAspectRatio="none" aria-hidden="true">
-          <defs>
-            <linearGradient id="trend-fill" x1="0" x2="0" y1="0" y2="1">
-              <stop class="trend-fill-start" offset="0%" />
-              <stop class="trend-fill-end" offset="100%" />
-            </linearGradient>
-          </defs>
-          <path class="grid-line" d="M 20 20 H 300" />
-          <path class="grid-line" d="M 20 110 H 300" />
-          <path class="grid-line" d="M 20 200 H 300" />
-          <path class="area-path" :d="trendAreaPath" fill="url(#trend-fill)" />
-          <path class="line-path" :d="trendLinePath" />
-          <circle
-            v-for="point in trendPoints"
-            :key="point.key"
-            class="point-dot"
-            :cx="point.x"
-            :cy="point.y"
-            r="4"
-          />
-        </svg>
-        <div class="trend-axis">
-          <span v-for="point in trendPoints" :key="point.key">{{ point.label }}</span>
-        </div>
-      </div>
-    </el-card>
-    <el-card class="chart-card" shadow="never">
-      <template #header>
-        <div class="card-head">
-          <div>
             <h3>季度月度对比</h3>
             <p>查看当前季度三个月的累计时长分布。</p>
           </div>
@@ -130,66 +87,6 @@ const props = defineProps({
   referenceDate: String,
 })
 
-const monthlyRecords = computed(() => {
-  const month = dayjs(props.referenceDate).format('YYYY-MM')
-  return props.records.filter((record) => record.date.startsWith(month))
-})
-
-const maxTrendHours = computed(() => {
-  const max = Math.max(...monthlyRecords.value.map((record) => record.overtimeHours), 1)
-  return Number(max.toFixed(1))
-})
-
-const midTrendHours = computed(() => Number((maxTrendHours.value / 2).toFixed(1)))
-
-const trendPoints = computed(() => {
-  const items = monthlyRecords.value
-  if (!items.length) return []
-
-  if (items.length === 1) {
-    const only = items[0]
-    const y = 200 - (only.overtimeHours / maxTrendHours.value) * 180
-
-    return [
-      {
-        key: only.date,
-        label: only.date.slice(8),
-        x: 160,
-        y,
-      },
-    ]
-  }
-
-  return items.map((record, index) => {
-    const x = 20 + (280 / (items.length - 1)) * index
-    const ratio = maxTrendHours.value ? record.overtimeHours / maxTrendHours.value : 0
-    const y = 200 - ratio * 180
-
-    return {
-      key: record.date,
-      label: record.date.slice(8),
-      x: Number(x.toFixed(2)),
-      y: Number(y.toFixed(2)),
-    }
-  })
-})
-
-const trendLinePath = computed(() => {
-  if (!trendPoints.value.length) return ''
-
-  return trendPoints.value
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-    .join(' ')
-})
-
-const trendAreaPath = computed(() => {
-  if (!trendPoints.value.length) return ''
-
-  const first = trendPoints.value[0]
-  const last = trendPoints.value[trendPoints.value.length - 1]
-  return `${trendLinePath.value} L ${last.x} 200 L ${first.x} 200 Z`
-})
-
 const monthlyBuckets = computed(() => {
   const current = dayjs(props.referenceDate)
   const quarter = Math.floor(current.month() / 3)
@@ -249,7 +146,7 @@ const weekendDash = computed(() => (weekendPercent.value / 100) * circumference)
 <style scoped>
 .charts-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -289,68 +186,6 @@ const weekendDash = computed(() => (weekendPercent.value / 100) * circumference)
 
 :deep(.el-card__body) {
   padding-top: 12px;
-}
-
-.trend-chart {
-  display: grid;
-  grid-template-columns: 42px minmax(0, 1fr);
-  gap: 10px;
-}
-
-.chart-scale {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  color: var(--muted);
-  font-size: 0.82rem;
-  padding: 8px 0 18px;
-}
-
-.trend-svg {
-  width: 100%;
-  height: 220px;
-}
-
-.grid-line {
-  fill: none;
-  stroke: color-mix(in srgb, var(--border) 95%, transparent);
-  stroke-dasharray: 4 6;
-}
-
-.line-path {
-  fill: none;
-  stroke: var(--brand);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.area-path {
-  transition: all 0.25s ease;
-}
-
-.trend-fill-start {
-  stop-color: var(--trend-fill-start);
-}
-
-.trend-fill-end {
-  stop-color: var(--trend-fill-end);
-}
-
-.point-dot {
-  fill: #ffffff;
-  stroke: var(--brand);
-  stroke-width: 3;
-}
-
-.trend-axis {
-  grid-column: 2;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(18px, 1fr));
-  gap: 8px;
-  color: var(--muted);
-  font-size: 0.8rem;
-  text-align: center;
 }
 
 .bars-chart {

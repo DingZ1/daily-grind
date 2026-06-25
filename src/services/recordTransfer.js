@@ -1,11 +1,13 @@
 import { DAY_KIND_LABELS } from '../constants/rules'
+import { formatAttendanceSegments } from '../utils/attendance'
 
 const TRANSFER_COLUMNS = [
   { key: 'date', label: '日期' },
   { key: 'dayKind', label: '日期类型编码' },
   { key: 'dayKindLabel', label: '日期类型' },
-  { key: 'startTime', label: '开始时间' },
-  { key: 'endTime', label: '结束时间' },
+  { key: 'startTime', label: '加班开始时间' },
+  { key: 'endTime', label: '加班结束时间' },
+  { key: 'attendanceSegments', label: '当天打卡记录' },
   { key: 'overtimeHours', label: '计入时长(h)' },
   { key: 'status', label: '状态' },
   { key: 'note', label: '备注' },
@@ -21,8 +23,12 @@ const HEADER_ALIASES = {
   日期类型: 'dayKindLabel',
   startTime: 'startTime',
   开始时间: 'startTime',
+  加班开始时间: 'startTime',
   endTime: 'endTime',
   结束时间: 'endTime',
+  加班结束时间: 'endTime',
+  attendanceSegments: 'attendanceSegments',
+  当天打卡记录: 'attendanceSegments',
   note: 'note',
   备注: 'note',
 }
@@ -54,6 +60,10 @@ function getRecordCellValue(record, column) {
 
   if (column.key === 'status') {
     return record.status === 'valid' ? 'valid' : 'invalid'
+  }
+
+  if (column.key === 'attendanceSegments') {
+    return formatAttendanceSegments(record.attendanceSegments)
   }
 
   return record[column.key] ?? ''
@@ -113,8 +123,8 @@ function normalizeRowsToRecords(rows) {
   const [headerRow, ...dataRows] = filledRows
   const headers = headerRow.cells.map((cell) => HEADER_ALIASES[cell] || cell)
 
-  if (!headers.includes('date') || !headers.includes('startTime') || !headers.includes('endTime')) {
-    throw new Error('导入文件缺少必要列：日期、开始时间、结束时间。')
+  if (!headers.includes('date') || !headers.includes('startTime') || !headers.includes('endTime') || !headers.includes('attendanceSegments')) {
+    throw new Error('导入文件缺少必要列：日期、加班开始时间、加班结束时间、当天打卡记录。')
   }
 
   return dataRows.map((row) => {
@@ -192,9 +202,10 @@ function buildWorksheetXml(rows) {
   <cols>
     <col min="1" max="1" width="14" customWidth="1"/>
     <col min="2" max="3" width="14" customWidth="1"/>
-    <col min="4" max="5" width="12" customWidth="1"/>
-    <col min="6" max="6" width="14" customWidth="1"/>
-    <col min="7" max="9" width="18" customWidth="1"/>
+    <col min="4" max="5" width="14" customWidth="1"/>
+    <col min="6" max="6" width="30" customWidth="1"/>
+    <col min="7" max="7" width="14" customWidth="1"/>
+    <col min="8" max="10" width="18" customWidth="1"/>
   </cols>
   <sheetData>${sheetRows}</sheetData>
 </worksheet>`

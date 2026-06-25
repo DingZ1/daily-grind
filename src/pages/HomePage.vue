@@ -156,6 +156,12 @@
         </aside>
       </section>
 
+      <AttendanceSummaryCard
+        :records="store.recordList"
+        :reference-date="quarterReferenceDate"
+        :settings="store.settings"
+      />
+
       <StatsCharts :records="quarterRecords" :reference-date="quarterReferenceDate" />
       <RecordTable
         :records="quarterRecords"
@@ -186,6 +192,7 @@ import QuarterSummary from '../components/QuarterSummary.vue'
 import CalendarToolbar from '../components/CalendarToolbar.vue'
 import StoragePanel from '../components/StoragePanel.vue'
 import OvertimeCalendar from '../components/OvertimeCalendar.vue'
+import AttendanceSummaryCard from '../components/AttendanceSummaryCard.vue'
 import RecordEditorDrawer from '../components/RecordEditorDrawer.vue'
 import RecordTable from '../components/RecordTable.vue'
 import { useOvertimeStore } from '../stores/overtime'
