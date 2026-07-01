@@ -32,7 +32,7 @@
         :disabled="isBusy || !storage.supported || hasFile"
         @click="$emit('create-file')"
       >
-        {{ hasFile ? '已新建 JSON' : '新建 JSON 文件' }}
+        {{ hasFile ? 'JSON 已绑定' : '新建 JSON 文件' }}
       </button>
       <button
         class="ghost-button"
@@ -48,7 +48,7 @@
         :disabled="isBusy || !hasFile"
         @click="$emit('delete-file')"
       >
-        删除 JSON
+        解除绑定
       </button>
     </div>
 
@@ -63,13 +63,13 @@
     >
       <div class="storage-help-content">
         <p>
-          新建或打开 JSON 文件后，之后保存记录会自动写入这份文件；即使浏览器缓存被清理，也可以通过“打开 JSON 文件”恢复。
+          新建或打开 JSON 文件后，之后保存记录会自动写入这份文件；桌面端和支持文件访问的网页端可以绑定同一个文件。
         </p>
         <ol>
           <li>首次使用：点击“新建 JSON 文件”，选择一个安全的位置保存。</li>
-          <li>已有备份：点击“打开 JSON 文件”，确认预览后加载并绑定。</li>
+          <li>已有备份：点击“打开 JSON 文件”，确认预览后自动合并并绑定。</li>
           <li>日常使用：保存记录、导入数据、修改设置后会自动同步，无需手动同步。</li>
-          <li>不再绑定：点击“删除 JSON”，只解除绑定，不会删除电脑上的文件。</li>
+          <li>不再绑定：点击“解除绑定”，不会删除电脑上的文件。</li>
         </ol>
       </div>
       <template #footer>
@@ -99,6 +99,8 @@ defineEmits([
 const isBusy = computed(() => props.storage.status === 'checking' || props.storage.status === 'syncing')
 const hasFile = computed(() => Boolean(props.storage.fileName))
 const helpOpen = ref(false)
+const isDesktop = computed(() => props.storage.kind === 'desktop')
+const fileLabel = computed(() => props.storage.filePath || props.storage.fileName)
 
 const statusTone = computed(() => {
   if (!props.storage.supported || props.storage.status === 'unsupported') return 'muted'
@@ -109,10 +111,10 @@ const statusTone = computed(() => {
 })
 
 const statusBadgeText = computed(() => {
-  if (!props.storage.supported || props.storage.status === 'unsupported') return '仅浏览器缓存'
+  if (!props.storage.supported || props.storage.status === 'unsupported') return isDesktop.value ? '仅应用缓存' : '仅浏览器缓存'
   if (props.storage.status === 'checking') return '检查中'
   if (props.storage.status === 'syncing') return '同步中'
-  if (props.storage.status === 'ready') return 'JSON 已绑定'
+  if (props.storage.status === 'ready') return isDesktop.value ? '桌面 JSON 已绑定' : '网页 JSON 已绑定'
   if (props.storage.status === 'needs-permission') return '需要授权'
   if (props.storage.status === 'error') return '同步异常'
   return '未绑定 JSON'
@@ -120,26 +122,28 @@ const statusBadgeText = computed(() => {
 
 const statusTitle = computed(() => {
   if (!props.storage.supported || props.storage.status === 'unsupported') {
-    return '当前使用浏览器缓存'
+    return isDesktop.value ? '当前使用应用缓存' : '当前使用浏览器缓存'
   }
 
   if (props.storage.status === 'checking') return '正在检查数据文件'
   if (props.storage.status === 'syncing') return '正在同步 JSON 文件'
-  if (props.storage.status === 'ready') return `已绑定 ${props.storage.fileName}`
-  if (props.storage.status === 'needs-permission') return `需要重新打开 ${props.storage.fileName}`
+  if (props.storage.status === 'ready') return `已绑定 ${fileLabel.value}`
+  if (props.storage.status === 'needs-permission') return `需要重新打开 ${fileLabel.value}`
   if (props.storage.status === 'error') return 'JSON 文件同步异常'
-  return '当前使用浏览器缓存'
+  return isDesktop.value ? '当前使用应用缓存' : '当前使用浏览器缓存'
 })
 
 const statusDescription = computed(() => {
   if (!props.storage.supported || props.storage.status === 'unsupported') {
-    return '当前浏览器不支持直接读写本机文件，数据会保存在浏览器缓存中，请继续使用 Excel 导出或 Excel/CSV 导入备份。'
+    return isDesktop.value
+      ? '当前应用无法直接读写本机文件，数据会暂存在应用缓存中。'
+      : '当前浏览器不支持直接读写本机文件，数据会保存在浏览器缓存中，请继续使用 Excel 导出或 Excel/CSV 导入备份。'
   }
 
   if (props.storage.status === 'ready') {
     return props.storage.lastSyncedAt
       ? `已同步到本机 JSON 文件，最近同步时间：${props.storage.lastSyncedAt}`
-      : '已从本机 JSON 文件加载数据，后续修改会自动同步。'
+      : '已从本机 JSON 文件加载数据，桌面端和网页端可通过同一个文件共享。'
   }
 
   if (props.storage.status === 'needs-permission') {
@@ -154,7 +158,7 @@ const statusDescription = computed(() => {
     return '正在写入本机 JSON 文件，同时也会保留浏览器缓存。'
   }
 
-  return '建议新建或打开一个 JSON 文件作为主备份；浏览器缓存只用于快速启动和兜底恢复。'
+  return '建议新建或打开一个 JSON 文件作为主备份；应用缓存只用于快速启动和兜底恢复。'
 })
 </script>
 

@@ -2,11 +2,14 @@ import { defineStore } from 'pinia'
 import dayjs from 'dayjs'
 import {
   bindDataFile,
+  createSyncMeta,
   createDataFile,
   disconnectDataFile,
+  getStorageKind,
   isFileStorageSupported,
   loadBoundStoreFile,
   loadStore,
+  mergeStorePayloads,
   previewDataFile,
   reconnectBoundStoreFile,
   saveStore,
@@ -33,14 +36,17 @@ function createDefaultState() {
     records: {},
     quarterTargets: {},
     theme: 'soft',
+    syncMeta: createSyncMeta(),
   }
 }
 
 function createStorageState() {
   return {
     supported: isFileStorageSupported(),
+    kind: getStorageKind(),
     status: 'checking',
     fileName: '',
+    filePath: '',
     lastSyncedAt: '',
     error: '',
   }
@@ -48,6 +54,29 @@ function createStorageState() {
 
 function getErrorMessage(error, fallback = '操作失败，请稍后重试。') {
   return error?.message || fallback
+}
+
+function nowIso() {
+  return new Date().toISOString()
+}
+
+function normalizeSyncMetaState(syncMeta) {
+  const normalized = createSyncMeta()
+
+  if (!syncMeta || typeof syncMeta !== 'object') {
+    return normalized
+  }
+
+  normalized.settings = { ...(syncMeta.settings || {}) }
+  normalized.records = { ...(syncMeta.records || {}) }
+  normalized.quarterTargets = { ...(syncMeta.quarterTargets || {}) }
+  normalized.theme = syncMeta.theme || ''
+  normalized.deleted = {
+    records: { ...(syncMeta.deleted?.records || {}) },
+    quarterTargets: { ...(syncMeta.deleted?.quarterTargets || {}) },
+  }
+
+  return normalized
 }
 
 function normalizeRecord(record, date) {
@@ -105,6 +134,7 @@ export const useOvertimeStore = defineStore('overtime', {
   state: () => ({
     ...createDefaultState(),
     loaded: false,
+    hasLocalPayload: false,
     storage: createStorageState(),
   }),
   getters: {
@@ -123,6 +153,7 @@ export const useOvertimeStore = defineStore('overtime', {
       this.records = normalizeRecords(saved.records)
       this.quarterTargets = normalizeQuarterTargets(saved.quarterTargets)
       this.theme = saved.theme || this.theme
+      this.syncMeta = normalizeSyncMetaState(saved.syncMeta)
     },
     buildPersistPayload() {
       return {
@@ -130,16 +161,70 @@ export const useOvertimeStore = defineStore('overtime', {
         records: this.records,
         quarterTargets: this.quarterTargets,
         theme: this.theme,
+        syncMeta: normalizeSyncMetaState(this.syncMeta),
       }
+    },
+    applyStorageReady(result) {
+      this.storage.status = 'ready'
+      this.storage.kind = getStorageKind()
+      this.storage.fileName = result.fileName || ''
+      this.storage.filePath = result.filePath || ''
+      this.storage.lastSyncedAt = result.savedAt || this.storage.lastSyncedAt
+      this.storage.error = ''
+    },
+    ensureSyncMeta() {
+      this.syncMeta = normalizeSyncMetaState(this.syncMeta)
+      return this.syncMeta
+    },
+    touchSettings(fields, timestamp = nowIso()) {
+      const meta = this.ensureSyncMeta()
+
+      fields.forEach((field) => {
+        meta.settings[field] = timestamp
+      })
+    },
+    touchRecord(date, timestamp = nowIso()) {
+      const meta = this.ensureSyncMeta()
+
+      meta.records[date] = timestamp
+      delete meta.deleted.records[date]
+    },
+    tombstoneRecord(date, timestamp = nowIso()) {
+      const meta = this.ensureSyncMeta()
+
+      delete meta.records[date]
+      meta.deleted.records[date] = timestamp
+    },
+    touchQuarterTarget(quarterKey, timestamp = nowIso()) {
+      const meta = this.ensureSyncMeta()
+
+      meta.quarterTargets[quarterKey] = timestamp
+      delete meta.deleted.quarterTargets[quarterKey]
+    },
+    tombstoneQuarterTarget(quarterKey, timestamp = nowIso()) {
+      const meta = this.ensureSyncMeta()
+
+      delete meta.quarterTargets[quarterKey]
+      meta.deleted.quarterTargets[quarterKey] = timestamp
+    },
+    touchTheme(timestamp = nowIso()) {
+      const meta = this.ensureSyncMeta()
+      meta.theme = timestamp
     },
     async initialize() {
       if (this.loaded) return
 
       const saved = loadStore()
-      this.applyPayload(saved)
+      if (saved) {
+        this.applyPayload(saved)
+        this.hasLocalPayload = true
+        saveStore(this.buildPersistPayload())
+      }
+
       this.loaded = true
 
       this.storage.supported = isFileStorageSupported()
+      this.storage.kind = getStorageKind()
 
       if (!this.storage.supported) {
         this.storage.status = 'unsupported'
@@ -151,17 +236,22 @@ export const useOvertimeStore = defineStore('overtime', {
       const fileResult = await loadBoundStoreFile()
 
       if (fileResult.status === 'ready') {
-        this.applyPayload(fileResult.payload)
+        const payload = this.hasLocalPayload
+          ? mergeStorePayloads(this.buildPersistPayload(), fileResult.payload)
+          : fileResult.payload
+
+        this.applyPayload(payload)
+        this.hasLocalPayload = true
         saveStore(this.buildPersistPayload())
-        this.storage.status = 'ready'
-        this.storage.fileName = fileResult.fileName
-        this.storage.error = ''
+        this.applyStorageReady(fileResult)
+        await this.syncStorageFile(this.buildPersistPayload()).catch(() => {})
         return
       }
 
       if (fileResult.status === 'needs-permission') {
         this.storage.status = 'needs-permission'
         this.storage.fileName = fileResult.fileName
+        this.storage.filePath = fileResult.filePath || ''
         this.storage.error = ''
         return
       }
@@ -169,6 +259,7 @@ export const useOvertimeStore = defineStore('overtime', {
       if (fileResult.status === 'error') {
         this.storage.status = 'error'
         this.storage.fileName = fileResult.fileName
+        this.storage.filePath = fileResult.filePath || ''
         this.storage.error = getErrorMessage(fileResult.error, '读取 JSON 数据文件失败。')
         return
       }
@@ -178,6 +269,7 @@ export const useOvertimeStore = defineStore('overtime', {
     persist() {
       const payload = this.buildPersistPayload()
 
+      this.hasLocalPayload = true
       saveStore(payload)
 
       if (this.storage.status === 'ready' || this.storage.status === 'syncing') {
@@ -186,7 +278,7 @@ export const useOvertimeStore = defineStore('overtime', {
     },
     async createStorageFile() {
       if (!this.storage.supported) {
-        throw new Error('当前浏览器不支持直接保存 JSON 数据文件。')
+        throw new Error('当前环境不支持直接保存 JSON 数据文件。')
       }
 
       const previousStorage = { ...this.storage }
@@ -196,10 +288,13 @@ export const useOvertimeStore = defineStore('overtime', {
       try {
         const result = await createDataFile(this.buildPersistPayload())
 
-        this.storage.status = 'ready'
-        this.storage.fileName = result.fileName
-        this.storage.lastSyncedAt = result.savedAt
-        this.storage.error = ''
+        if (result.payload) {
+          this.applyPayload(result.payload)
+        }
+
+        this.hasLocalPayload = true
+        saveStore(this.buildPersistPayload())
+        this.applyStorageReady(result)
         return result
       } catch (error) {
         this.storage = {
@@ -211,43 +306,51 @@ export const useOvertimeStore = defineStore('overtime', {
     },
     async previewStorageFile() {
       if (!this.storage.supported) {
-        throw new Error('当前浏览器不支持直接打开 JSON 数据文件。')
+        throw new Error('当前环境不支持直接打开 JSON 数据文件。')
       }
 
       return previewDataFile()
     },
     async openStorageFile(filePreview) {
       if (!this.storage.supported) {
-        throw new Error('当前浏览器不支持直接打开 JSON 数据文件。')
+        throw new Error('当前环境不支持直接打开 JSON 数据文件。')
       }
 
-      if (!filePreview?.handle || !filePreview?.payload) {
+      if ((!filePreview?.handle && !filePreview?.filePath) || !filePreview?.payload) {
         throw new Error('没有可打开的 JSON 数据文件。')
       }
 
       const previousStorage = { ...this.storage }
       const previousPayload = this.buildPersistPayload()
+      const previousHasLocalPayload = this.hasLocalPayload
       this.storage.status = 'syncing'
       this.storage.error = ''
 
       try {
-        this.applyPayload(filePreview.payload)
+        const mergedPayload = this.hasLocalPayload
+          ? mergeStorePayloads(previousPayload, filePreview.payload)
+          : filePreview.payload
+
+        this.applyPayload(mergedPayload)
         const payload = this.buildPersistPayload()
-        const result = await bindDataFile(filePreview.handle, payload)
+        const result = await bindDataFile(filePreview, payload)
 
-        saveStore(payload)
+        if (result.payload) {
+          this.applyPayload(result.payload)
+        }
 
-        this.storage.status = 'ready'
-        this.storage.fileName = result.fileName
-        this.storage.lastSyncedAt = result.savedAt
-        this.storage.error = ''
+        this.hasLocalPayload = true
+        saveStore(this.buildPersistPayload())
+
+        this.applyStorageReady(result)
         return {
           ...result,
-          payload,
+          payload: this.buildPersistPayload(),
         }
       } catch (error) {
         this.applyPayload(previousPayload)
         saveStore(previousPayload)
+        this.hasLocalPayload = previousHasLocalPayload
         this.storage = {
           ...previousStorage,
           error: error?.name === 'AbortError' ? previousStorage.error : getErrorMessage(error),
@@ -257,7 +360,7 @@ export const useOvertimeStore = defineStore('overtime', {
     },
     async reconnectStorageFile() {
       if (!this.storage.supported) {
-        throw new Error('当前浏览器不支持直接保存 JSON 数据文件。')
+        throw new Error('当前环境不支持直接保存 JSON 数据文件。')
       }
 
       this.storage.status = 'syncing'
@@ -266,23 +369,74 @@ export const useOvertimeStore = defineStore('overtime', {
       const result = await reconnectBoundStoreFile()
 
       if (result.status === 'ready') {
-        this.applyPayload(result.payload)
+        const payload = this.hasLocalPayload
+          ? mergeStorePayloads(this.buildPersistPayload(), result.payload)
+          : result.payload
+
+        this.applyPayload(payload)
+        this.hasLocalPayload = true
         saveStore(this.buildPersistPayload())
-        this.storage.status = 'ready'
-        this.storage.fileName = result.fileName
-        this.storage.error = ''
+        this.applyStorageReady(result)
+        await this.syncStorageFile(this.buildPersistPayload()).catch(() => {})
         return result
       }
 
       if (result.status === 'needs-permission') {
         this.storage.status = 'needs-permission'
         this.storage.fileName = result.fileName
+        this.storage.filePath = result.filePath || ''
         return result
       }
 
       this.storage.status = 'cache-only'
       this.storage.fileName = ''
+      this.storage.filePath = ''
       return result
+    },
+    async refreshFromStorageFile() {
+      if (
+        !this.loaded ||
+        !this.storage.supported ||
+        !this.storage.fileName ||
+        this.storage.status === 'checking' ||
+        this.storage.status === 'syncing'
+      ) {
+        return null
+      }
+
+      const previousStorage = { ...this.storage }
+
+      try {
+        const result = await reconnectBoundStoreFile()
+
+        if (result.status === 'ready') {
+          const payload = this.hasLocalPayload
+            ? mergeStorePayloads(this.buildPersistPayload(), result.payload)
+            : result.payload
+
+          this.applyPayload(payload)
+          this.hasLocalPayload = true
+          saveStore(this.buildPersistPayload())
+          this.applyStorageReady(result)
+          await this.syncStorageFile(this.buildPersistPayload()).catch(() => {})
+          return result
+        }
+
+        if (result.status === 'needs-permission') {
+          this.storage.status = 'needs-permission'
+          this.storage.fileName = result.fileName
+          this.storage.filePath = result.filePath || ''
+          return result
+        }
+
+        return result
+      } catch (error) {
+        this.storage = {
+          ...previousStorage,
+          error: getErrorMessage(error, previousStorage.error),
+        }
+        return null
+      }
     },
     async syncStorageFile(payload = this.buildPersistPayload()) {
       if (!this.storage.supported || !this.storage.fileName) return null
@@ -293,10 +447,13 @@ export const useOvertimeStore = defineStore('overtime', {
       try {
         const result = await syncBoundStoreFile(payload)
 
-        this.storage.status = 'ready'
-        this.storage.fileName = result.fileName
-        this.storage.lastSyncedAt = result.savedAt
-        this.storage.error = ''
+        if (result.payload) {
+          this.applyPayload(result.payload)
+          this.hasLocalPayload = true
+          saveStore(this.buildPersistPayload())
+        }
+
+        this.applyStorageReady(result)
         return result
       } catch (error) {
         this.storage.status = error?.name === 'NotAllowedError' ? 'needs-permission' : 'error'
@@ -309,6 +466,7 @@ export const useOvertimeStore = defineStore('overtime', {
 
       this.storage.status = this.storage.supported ? 'cache-only' : 'unsupported'
       this.storage.fileName = ''
+      this.storage.filePath = ''
       this.storage.lastSyncedAt = ''
       this.storage.error = ''
     },
@@ -325,6 +483,7 @@ export const useOvertimeStore = defineStore('overtime', {
       })
 
       this.records[date] = payload
+      this.touchRecord(date)
       this.persist()
       return payload
     },
@@ -333,6 +492,7 @@ export const useOvertimeStore = defineStore('overtime', {
       let updated = 0
       let skipped = 0
       const errors = []
+      const changedDates = []
 
       rows.forEach((row) => {
         const rowNumber = row.__rowNumber || '-'
@@ -389,9 +549,12 @@ export const useOvertimeStore = defineStore('overtime', {
         }
 
         this.records[date] = payload
+        changedDates.push(date)
       })
 
       if (created || updated) {
+        const timestamp = nowIso()
+        changedDates.forEach((date) => this.touchRecord(date, timestamp))
         this.persist()
       }
 
@@ -403,14 +566,24 @@ export const useOvertimeStore = defineStore('overtime', {
       }
     },
     removeRecord(date) {
-      delete this.records[formatDate(date)]
+      const formattedDate = formatDate(date)
+
+      delete this.records[formattedDate]
+      this.tombstoneRecord(formattedDate)
       this.persist()
     },
     updateSettings(nextSettings) {
+      const changedFields = Object.entries(nextSettings || {})
+        .filter(([field, value]) => this.settings[field] !== value)
+        .map(([field]) => field)
+
+      if (!changedFields.length) return
+
       this.settings = {
         ...this.settings,
         ...nextSettings,
       }
+      this.touchSettings(changedFields)
       this.persist()
     },
     updateQuarterTarget(referenceDate, hours) {
@@ -424,6 +597,7 @@ export const useOvertimeStore = defineStore('overtime', {
         ...this.quarterTargets,
         [getQuarterKey(referenceDate)]: Number(numericHours.toFixed(1)),
       }
+      this.touchQuarterTarget(getQuarterKey(referenceDate))
       this.persist()
     },
     clearQuarterTarget(referenceDate) {
@@ -437,10 +611,14 @@ export const useOvertimeStore = defineStore('overtime', {
       delete nextQuarterTargets[quarterKey]
 
       this.quarterTargets = nextQuarterTargets
+      this.tombstoneQuarterTarget(quarterKey)
       this.persist()
     },
     updateTheme(theme) {
+      if (this.theme === theme) return
+
       this.theme = theme
+      this.touchTheme()
       this.persist()
     },
     getRecordByDate(date) {

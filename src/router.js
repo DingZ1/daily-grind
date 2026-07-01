@@ -1,5 +1,6 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import HomePage from './pages/HomePage.vue'
+import SettingsPage from './pages/SettingsPage.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -8,6 +9,15 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomePage,
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: SettingsPage,
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/',
     },
   ],
 })
