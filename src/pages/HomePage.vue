@@ -1,6 +1,8 @@
 <template>
   <DefaultLayout>
     <main class="page-shell">
+      <AccountPanel />
+
       <QuarterSummary
         :quarter-label="quarterLabel"
         :query-year="queryYear"
@@ -25,6 +27,30 @@
         @open-file="openDataFile"
         @delete-file="deleteDataFile"
       />
+
+      <el-dialog
+        :model-value="store.cloudSync.status === 'conflict'"
+        title="发现云端数据冲突"
+        width="min(560px, 92vw)"
+        :close-on-click-modal="false"
+        :close-on-press-escape="false"
+        :show-close="false"
+      >
+        <p class="dialog-copy">该账号的数据已在其他设备更新。请选择保留云端版本，或用当前设备的数据覆盖云端。</p>
+        <template #footer>
+          <button class="ghost-button" type="button" @click="exportPendingSnapshot">导出当前设备 JSON</button>
+          <button class="ghost-button" type="button" @click="resolveConflict('cloud')">使用云端版本</button>
+          <button class="primary-button" type="button" @click="resolveConflict('local')">使用当前设备版本</button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="migrationOpen" title="发现旧版本地数据" width="min(540px, 92vw)" :close-on-click-modal="false">
+        <p class="dialog-copy">检测到 {{ legacyRecordCount }} 条尚未归属账号的旧记录。你可以将整份数据导入当前账号，或稍后通过 JSON 手工导入。</p>
+        <template #footer>
+          <button class="ghost-button" type="button" @click="migrationOpen = false">稍后处理</button>
+          <button class="primary-button" type="button" :disabled="migrating" @click="migrateLegacyData">{{ migrating ? '导入中…' : '导入当前账号' }}</button>
+        </template>
+      </el-dialog>
 
       <CalendarToolbar
         :today-date-parts="todayDateParts"
@@ -184,10 +210,11 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, ref, shallowRef, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
 import dayjs from 'dayjs'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
+import AccountPanel from '../components/AccountPanel.vue'
 import QuarterSummary from '../components/QuarterSummary.vue'
 import CalendarToolbar from '../components/CalendarToolbar.vue'
 import StoragePanel from '../components/StoragePanel.vue'
@@ -196,18 +223,30 @@ import AttendanceSummaryCard from '../components/AttendanceSummaryCard.vue'
 import RecordEditorDrawer from '../components/RecordEditorDrawer.vue'
 import RecordTable from '../components/RecordTable.vue'
 import { useOvertimeStore } from '../stores/overtime'
+import { useAuthStore } from '../stores/auth'
 import { useCalendar } from '../composables/useCalendar'
 import { useQuarterStats } from '../composables/useQuarterStats'
 import { useTheme } from '../composables/useTheme'
 import { getDayKind } from '../utils/holiday'
 import { downloadRecordsExcel, parseRecordsFile } from '../services/recordTransfer'
+import { loadLegacyStore, removeLegacyStore } from '../services/storage'
 
 const StatsCharts = defineAsyncComponent(() => import('../components/StatsCharts.vue'))
 
 const store = useOvertimeStore()
-void store.initialize().catch((error) => {
+const auth = useAuthStore()
+const legacyPayload = shallowRef(loadLegacyStore())
+const migrationOpen = ref(Boolean(legacyPayload.value))
+const migrating = ref(false)
+const legacyRecordCount = computed(() => Object.keys(legacyPayload.value?.records || {}).length)
+
+const initialization = store.initialize(auth.user.id).catch((error) => {
   ElMessage.error(error.message || '加载数据失败。')
 })
+
+const handleUnlock = () => void store.retryPendingSnapshot()
+window.addEventListener('daily-grind:unlocked', handleUnlock)
+onBeforeUnmount(() => window.removeEventListener('daily-grind:unlocked', handleUnlock))
 
 const {
   viewMonth,
@@ -313,6 +352,46 @@ watch(selectedDate, (value) => {
 
 function isCanceledAction(error) {
   return error?.name === 'AbortError' || error === 'cancel' || error === 'close'
+}
+
+async function migrateLegacyData() {
+  if (!legacyPayload.value) return
+  await initialization
+  if (store.cloudSync.revision > 0 && Object.keys(store.records).length) {
+    try {
+      await ElMessageBox.confirm('当前账号已有云端数据，继续会用旧版本地数据替换整份账号数据。', '确认替换')
+    } catch {
+      return
+    }
+  }
+
+  migrating.value = true
+  try {
+    await store.replacePayload(legacyPayload.value)
+    removeLegacyStore()
+    legacyPayload.value = null
+    migrationOpen.value = false
+    ElMessage.success('旧版数据已导入当前账号。')
+  } catch (error) {
+    ElMessage.error(error.message || '旧版数据迁移失败。')
+  } finally {
+    migrating.value = false
+  }
+}
+
+function exportPendingSnapshot() {
+  const blob = new Blob([JSON.stringify(store.buildPersistPayload(), null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `daily-grind-conflict-${dayjs().format('YYYYMMDD-HHmmss')}.json`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function resolveConflict(strategy) {
+  await store.resolveConflict(strategy)
+  ElMessage.success(strategy === 'cloud' ? '已使用云端版本。' : '当前设备版本已同步到云端。')
 }
 
 async function createDataFile() {
@@ -451,6 +530,12 @@ async function importRecords(file) {
 .page-shell {
   display: grid;
   gap: 22px;
+}
+
+.dialog-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .json-preview {

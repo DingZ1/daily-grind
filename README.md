@@ -83,12 +83,45 @@ npm run preview
 
 节假日数据不保存在用户 JSON 中，当前内置在 `src/data/holidays/`。没有对应年份节假日数据时，系统会按周一到周五为工作日、周六周日为周末兜底计算额定时长。
 
+## Supabase 账号与云同步配置
+
+应用使用 Supabase Auth 管理邮箱注册、登录、邮箱验证和密码重置，业务数据存储在 PostgreSQL 的 `user_snapshots` 表中。浏览器只保留按用户 ID 隔离的离线缓存和待同步快照；Supabase Row Level Security 会限制每个账号只能访问自己的数据。
+
+1. 在 Supabase 创建一个新项目，并保持 Email/Password 登录和 Confirm email 开启。
+2. 在 Supabase SQL Editor 执行 `supabase/migrations/202607170001_auth_snapshots_and_wallpapers.sql`。该迁移会创建快照表、私有锁屏壁纸 Bucket 和对应的 RLS Policy。
+3. 复制 `.env.example` 为 `.env.local`，填写 Project URL 和 Publishable Key：
+
+```dotenv
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key
+```
+
+4. 在 Supabase Authentication 的 URL Configuration 中，把本地地址和 GitHub Pages 正式地址加入 Redirect URLs，例如：
+
+```text
+http://localhost:5173/
+https://<github-user>.github.io/<repository>/
+```
+
+5. 在 GitHub 仓库的 Settings → Secrets and variables → Actions → Variables 中添加 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_PUBLISHABLE_KEY`。Pages 工作流会在构建时注入它们。
+
+Publishable Key 会出现在浏览器构建产物中，这是 Supabase 前端客户端的预期用法；不要把 `service_role` Key 或数据库密码写入任何 `VITE_` 环境变量。
+
+登录后连续 1 小时没有键盘、鼠标、滚轮或触摸操作会自动退出。网络断开时应用会进入锁屏；恢复联网后，需要用当前账号的登录密码重新验证。锁屏密码不会保存到浏览器。
+
+自动化测试：
+
+```bash
+npm run test
+```
+
 ## 提交功能说明
 
 后续每次提交代码时，请同步更新本节，用一行说明本次提交的功能、修复或文档变化。建议提交前先补充表格，再一起提交。
 
 | 日期 | 提交标识 | 类型 | 功能说明 |
 | --- | --- | --- | --- |
+| 2026-07-18 | 待提交 | 功能 | 新增 Supabase 邮箱账号、云端快照同步、断网安全锁屏、账号隔离缓存与专属锁屏壁纸。 |
 | 2026-06-25 | 待提交 | 功能 | 新增当天打卡分段与本月考勤统计，支持迟到扣款和请假明细动态计算。 |
 | 2026-06-24 | 待提交 | 文档 | 新增 update-readme-on-commit 项目级 Codex skill，用于在每次提交前把本次变更摘要写入 README。 |
 | 2026-06-24 | 待提交 | 修复 | 将旧版本线上缓存中的默认主题迁移为柔和主题，并补充主题默认值说明。 |

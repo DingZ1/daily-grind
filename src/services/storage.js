@@ -1,14 +1,28 @@
-const STORAGE_KEY = 'daily-grind-store'
+const LEGACY_STORAGE_KEY = 'daily-grind-store'
 const DATA_VERSION = 4
 const SOFT_THEME_DEFAULT_VERSION = 3
 const DB_NAME = 'daily-grind-file-handles'
 const DB_VERSION = 1
 const HANDLE_STORE = 'handles'
-const HANDLE_KEY = 'primary-data-file'
+const LEGACY_HANDLE_KEY = 'primary-data-file'
 const DEFAULT_FILE_NAME = 'daily-grind-data.json'
 
 let activeFileHandle = null
+let activeUserId = ''
 let writeQueue = Promise.resolve()
+
+function getStorageKey() {
+  return activeUserId ? `${LEGACY_STORAGE_KEY}:${activeUserId}` : LEGACY_STORAGE_KEY
+}
+
+function getHandleKey() {
+  return activeUserId ? `${LEGACY_HANDLE_KEY}:${activeUserId}` : LEGACY_HANDLE_KEY
+}
+
+export function setStorageUser(userId = '') {
+  if (activeUserId !== userId) activeFileHandle = null
+  activeUserId = userId
+}
 
 function normalizeTheme(payload) {
   if (payload.theme === 'auto' && Number(payload.version || 1) < SOFT_THEME_DEFAULT_VERSION) {
@@ -95,7 +109,7 @@ async function getSavedFileHandle() {
 
     return await new Promise((resolve, reject) => {
       const transaction = db.transaction(HANDLE_STORE, 'readonly')
-      const request = transaction.objectStore(HANDLE_STORE).get(HANDLE_KEY)
+      const request = transaction.objectStore(HANDLE_STORE).get(getHandleKey())
 
       request.onsuccess = () => resolve(request.result || null)
       request.onerror = () => reject(request.error)
@@ -124,7 +138,7 @@ async function saveFileHandle(handle) {
       dbRequest.onsuccess = () => {
         const db = dbRequest.result
         const transaction = db.transaction(HANDLE_STORE, 'readwrite')
-        const request = transaction.objectStore(HANDLE_STORE).put(handle, HANDLE_KEY)
+        const request = transaction.objectStore(HANDLE_STORE).put(handle, getHandleKey())
 
         request.onerror = () => reject(request.error)
         transaction.oncomplete = () => {
@@ -157,7 +171,7 @@ export async function clearSavedFileHandle() {
       dbRequest.onsuccess = () => {
         const db = dbRequest.result
         const transaction = db.transaction(HANDLE_STORE, 'readwrite')
-        const request = transaction.objectStore(HANDLE_STORE).delete(HANDLE_KEY)
+        const request = transaction.objectStore(HANDLE_STORE).delete(getHandleKey())
 
         request.onerror = () => reject(request.error)
         transaction.oncomplete = () => {
@@ -221,7 +235,7 @@ export function isFileStorageSupported() {
 
 export function loadStore() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(getStorageKey())
     return raw ? extractStorePayload(JSON.parse(raw)) : null
   } catch {
     return null
@@ -229,7 +243,20 @@ export function loadStore() {
 }
 
 export function saveStore(payload) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(createStoreSnapshot(payload)))
+  localStorage.setItem(getStorageKey(), JSON.stringify(createStoreSnapshot(payload)))
+}
+
+export function loadLegacyStore() {
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY)
+    return raw ? extractStorePayload(JSON.parse(raw)) : null
+  } catch {
+    return null
+  }
+}
+
+export function removeLegacyStore() {
+  localStorage.removeItem(LEGACY_STORAGE_KEY)
 }
 
 export async function loadBoundStoreFile() {
