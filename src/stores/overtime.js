@@ -10,8 +10,18 @@ import {
   previewDataFile,
   reconnectBoundStoreFile,
   saveStore,
+  setStorageUser,
   syncBoundStoreFile,
 } from '../services/storage'
+import {
+  SnapshotConflictError,
+  clearPendingSnapshot,
+  createSnapshot,
+  loadPendingSnapshot,
+  loadSnapshot,
+  savePendingSnapshot,
+  saveSnapshot,
+} from '../services/cloudSnapshot'
 import { buildRecordPayload } from '../utils/overtime'
 import { getDayKind } from '../utils/holiday'
 import { formatDate, getQuarterKey } from '../utils/date'
@@ -104,8 +114,16 @@ function isValidDate(value) {
 export const useOvertimeStore = defineStore('overtime', {
   state: () => ({
     ...createDefaultState(),
+    userId: '',
     loaded: false,
     storage: createStorageState(),
+    cloudSync: {
+      status: 'idle',
+      revision: 0,
+      updatedAt: '',
+      error: '',
+      remote: null,
+    },
   }),
   getters: {
     recordList(state) {
@@ -132,12 +150,56 @@ export const useOvertimeStore = defineStore('overtime', {
         theme: this.theme,
       }
     },
-    async initialize() {
-      if (this.loaded) return
+    async initialize(userId) {
+      if (!userId) throw new Error('缺少当前用户，无法加载数据。')
+      if (this.loaded && this.userId === userId) return
+
+      if (this.userId !== userId) {
+        Object.assign(this, createDefaultState())
+        this.loaded = false
+        this.storage = createStorageState()
+        this.cloudSync = {
+          status: 'loading',
+          revision: 0,
+          updatedAt: '',
+          error: '',
+          remote: null,
+        }
+      }
+
+      this.userId = userId
+      setStorageUser(userId)
 
       const saved = loadStore()
       this.applyPayload(saved)
       this.loaded = true
+
+      const pending = loadPendingSnapshot(userId)
+      if (pending?.payload) this.applyPayload(pending.payload)
+
+      if (navigator.onLine) {
+        try {
+          const remote = await loadSnapshot(userId)
+          if (remote) {
+            this.cloudSync.revision = remote.revision
+            this.cloudSync.updatedAt = remote.updatedAt
+            if (!pending) {
+              this.applyPayload(remote.payload)
+              saveStore(this.buildPersistPayload())
+            }
+          } else if (!pending) {
+            const created = await createSnapshot(this.buildPersistPayload())
+            this.cloudSync.revision = created.revision
+            this.cloudSync.updatedAt = created.updatedAt
+          }
+          this.cloudSync.status = pending ? 'pending' : 'synced'
+          if (pending) await this.retryPendingSnapshot()
+        } catch (error) {
+          this.handleCloudError(error)
+        }
+      } else {
+        this.cloudSync.status = pending ? 'pending' : 'offline'
+      }
 
       this.storage.supported = isFileStorageSupported()
 
@@ -179,10 +241,103 @@ export const useOvertimeStore = defineStore('overtime', {
       const payload = this.buildPersistPayload()
 
       saveStore(payload)
+      if (this.userId) {
+        savePendingSnapshot(this.userId, payload)
+        this.cloudSync.status = navigator.onLine ? 'pending' : 'offline'
+        if (navigator.onLine) void this.retryPendingSnapshot()
+      }
 
       if (this.storage.status === 'ready' || this.storage.status === 'syncing') {
         void this.syncStorageFile(payload).catch(() => {})
       }
+    },
+    handleCloudError(error) {
+      if (error instanceof SnapshotConflictError) {
+        this.cloudSync.status = 'conflict'
+        this.cloudSync.remote = error.remote
+        this.cloudSync.error = error.message
+        return
+      }
+
+      if (!navigator.onLine || /failed to fetch|network|fetch failed/i.test(error?.message || '')) {
+        window.dispatchEvent(new CustomEvent('daily-grind:connectivity-lost'))
+      }
+
+      this.cloudSync.status = navigator.onLine ? 'error' : 'offline'
+      this.cloudSync.error = error?.message || '云端同步失败。'
+    },
+    async retryPendingSnapshot() {
+      if (!this.userId || !navigator.onLine || this.cloudSync.status === 'syncing') return
+      let pending = loadPendingSnapshot(this.userId)
+      if (!pending) {
+        this.cloudSync.status = 'synced'
+        return
+      }
+
+      this.cloudSync.status = 'syncing'
+      this.cloudSync.error = ''
+      try {
+        while (pending) {
+          const result = this.cloudSync.revision
+            ? await saveSnapshot(pending.payload, this.cloudSync.revision)
+            : await createSnapshot(pending.payload)
+          this.cloudSync.revision = result.revision
+          this.cloudSync.updatedAt = result.updatedAt
+
+          const latest = loadPendingSnapshot(this.userId)
+          if (!latest || latest.queuedAt === pending.queuedAt) {
+            clearPendingSnapshot(this.userId)
+            pending = null
+          } else {
+            pending = latest
+          }
+        }
+        this.cloudSync.status = 'synced'
+        this.cloudSync.remote = null
+      } catch (error) {
+        this.handleCloudError(error)
+      }
+    },
+    async resolveConflict(strategy) {
+      const remote = this.cloudSync.remote
+      if (!remote) return
+
+      if (strategy === 'cloud') {
+        this.applyPayload(remote.payload)
+        saveStore(this.buildPersistPayload())
+        clearPendingSnapshot(this.userId)
+        this.cloudSync.revision = remote.revision
+        this.cloudSync.updatedAt = remote.updatedAt
+        this.cloudSync.status = 'synced'
+        this.cloudSync.remote = null
+        this.cloudSync.error = ''
+        return
+      }
+
+      this.cloudSync.revision = remote.revision
+      this.cloudSync.remote = null
+      savePendingSnapshot(this.userId, this.buildPersistPayload())
+      this.cloudSync.status = 'pending'
+      await this.retryPendingSnapshot()
+    },
+    async replacePayload(payload) {
+      this.applyPayload(payload)
+      this.persist()
+      await this.retryPendingSnapshot()
+    },
+    clearUserState() {
+      Object.assign(this, createDefaultState())
+      this.userId = ''
+      this.loaded = false
+      this.storage = createStorageState()
+      this.cloudSync = {
+        status: 'idle',
+        revision: 0,
+        updatedAt: '',
+        error: '',
+        remote: null,
+      }
+      setStorageUser('')
     },
     async createStorageFile() {
       if (!this.storage.supported) {
@@ -241,6 +396,9 @@ export const useOvertimeStore = defineStore('overtime', {
         this.storage.fileName = result.fileName
         this.storage.lastSyncedAt = result.savedAt
         this.storage.error = ''
+        savePendingSnapshot(this.userId, payload)
+        this.cloudSync.status = 'pending'
+        await this.retryPendingSnapshot()
         return {
           ...result,
           payload,

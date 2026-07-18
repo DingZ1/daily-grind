@@ -6,6 +6,10 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 export default defineConfig({
   base: './',
+  test: {
+    environment: 'jsdom',
+    globals: true,
+  },
   plugins: [
     vue(),
     AutoImport({
