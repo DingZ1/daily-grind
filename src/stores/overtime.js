@@ -212,10 +212,10 @@ export const useOvertimeStore = defineStore('overtime', {
 
       const fileResult = await loadBoundStoreFile()
 
-      if (fileResult.status === 'ready') {
+      if (fileResult.status === 'ready' || fileResult.status === 'read-only') {
         this.applyPayload(fileResult.payload)
         saveStore(this.buildPersistPayload())
-        this.storage.status = 'ready'
+        this.storage.status = fileResult.status
         this.storage.fileName = fileResult.fileName
         this.storage.error = ''
         return
@@ -388,13 +388,13 @@ export const useOvertimeStore = defineStore('overtime', {
       try {
         this.applyPayload(filePreview.payload)
         const payload = this.buildPersistPayload()
-        const result = await bindDataFile(filePreview.handle, payload)
+        const result = await bindDataFile(filePreview.handle)
 
         saveStore(payload)
 
-        this.storage.status = 'ready'
+        this.storage.status = result.writable ? 'ready' : 'read-only'
         this.storage.fileName = result.fileName
-        this.storage.lastSyncedAt = result.savedAt
+        this.storage.lastSyncedAt = filePreview.savedAt
         this.storage.error = ''
         savePendingSnapshot(this.userId, payload)
         this.cloudSync.status = 'pending'
@@ -423,10 +423,10 @@ export const useOvertimeStore = defineStore('overtime', {
 
       const result = await reconnectBoundStoreFile()
 
-      if (result.status === 'ready') {
+      if (result.status === 'ready' || result.status === 'read-only') {
         this.applyPayload(result.payload)
         saveStore(this.buildPersistPayload())
-        this.storage.status = 'ready'
+        this.storage.status = result.status
         this.storage.fileName = result.fileName
         this.storage.error = ''
         return result

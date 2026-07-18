@@ -422,7 +422,15 @@ async function confirmOpenDataFile() {
     const result = await store.openStorageFile(pendingJsonPreview.value)
     pendingJsonPreview.value = null
     jsonPreviewOpen.value = false
-    ElMessage.success(`已打开 ${result.fileName}`)
+    const importedDates = Object.keys(result.payload?.records || {}).sort()
+    const latestDate = importedDates[importedDates.length - 1]
+    if (latestDate) selectedDate.value = latestDate
+    const importedCount = importedDates.length
+    if (result.writable) {
+      ElMessage.success(`已从 ${result.fileName} 导入 ${importedCount} 条记录，并启用自动写回。`)
+    } else {
+      ElMessage.warning(`已从 ${result.fileName} 导入 ${importedCount} 条记录；未获得写权限，后续修改暂不写回文件。`)
+    }
   } catch (error) {
     if (isCanceledAction(error)) return
     ElMessage.error(error.message || '打开 JSON 数据文件失败。')
