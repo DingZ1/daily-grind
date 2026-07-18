@@ -196,13 +196,21 @@ function isPermissionGranted(result) {
 
 async function queryFilePermission(handle, mode = 'readwrite') {
   if (!handle?.queryPermission) return false
-  return isPermissionGranted(await handle.queryPermission({ mode }))
+  try {
+    return isPermissionGranted(await handle.queryPermission({ mode }))
+  } catch {
+    return false
+  }
 }
 
 async function requestFilePermission(handle, mode = 'readwrite') {
   if (await queryFilePermission(handle, mode)) return true
   if (!handle?.requestPermission) return false
-  return isPermissionGranted(await handle.requestPermission({ mode }))
+  try {
+    return isPermissionGranted(await handle.requestPermission({ mode }))
+  } catch {
+    return false
+  }
 }
 
 async function readStoreFile(handle) {
@@ -272,7 +280,7 @@ export async function loadBoundStoreFile() {
 
   activeFileHandle = handle
 
-  if (!await queryFilePermission(handle)) {
+  if (!await queryFilePermission(handle, 'read')) {
     return {
       status: 'needs-permission',
       fileName: handle.name,
@@ -280,10 +288,12 @@ export async function loadBoundStoreFile() {
   }
 
   try {
+    const writable = await queryFilePermission(handle, 'readwrite')
     return {
-      status: 'ready',
+      status: writable ? 'ready' : 'read-only',
       fileName: handle.name,
       payload: await readStoreFile(handle),
+      writable,
     }
   } catch (error) {
     return {
@@ -305,8 +315,8 @@ export async function createDataFile(payload) {
 export async function previewDataFile() {
   const [handle] = await window.showOpenFilePicker(getFilePickerOptions())
 
-  if (!await requestFilePermission(handle)) {
-    throw new Error('没有获得数据文件的读写权限。')
+  if (!await requestFilePermission(handle, 'read')) {
+    throw new Error('没有获得读取 JSON 数据文件的权限。')
   }
 
   const file = await handle.getFile()
@@ -325,20 +335,24 @@ export async function previewDataFile() {
   }
 }
 
-export async function bindDataFile(handle, payload) {
-  const result = await writeStoreFile(handle, payload)
-
+export async function bindDataFile(handle) {
+  const writable = await requestFilePermission(handle, 'readwrite')
   await saveFileHandle(handle)
-  return result
+  return {
+    fileName: handle.name,
+    savedAt: '',
+    writable,
+  }
 }
 
 export async function openDataFile() {
   const preview = await previewDataFile()
-  await bindDataFile(preview.handle, preview.payload)
+  const binding = await bindDataFile(preview.handle)
 
   return {
     fileName: preview.fileName,
     payload: preview.payload,
+    writable: binding.writable,
   }
 }
 
@@ -349,7 +363,7 @@ export async function reconnectBoundStoreFile() {
     return { status: 'unbound' }
   }
 
-  if (!await requestFilePermission(handle)) {
+  if (!await requestFilePermission(handle, 'read')) {
     return {
       status: 'needs-permission',
       fileName: handle.name,
@@ -357,11 +371,13 @@ export async function reconnectBoundStoreFile() {
   }
 
   activeFileHandle = handle
+  const writable = await requestFilePermission(handle, 'readwrite')
 
   return {
-    status: 'ready',
+    status: writable ? 'ready' : 'read-only',
     fileName: handle.name,
     payload: await readStoreFile(handle),
+    writable,
   }
 }
 

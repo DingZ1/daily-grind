@@ -104,7 +104,7 @@ const statusTone = computed(() => {
   if (!props.storage.supported || props.storage.status === 'unsupported') return 'muted'
   if (props.storage.status === 'ready') return 'ready'
   if (props.storage.status === 'syncing' || props.storage.status === 'checking') return 'busy'
-  if (props.storage.status === 'needs-permission' || props.storage.status === 'error') return 'warning'
+  if (['read-only', 'needs-permission', 'error'].includes(props.storage.status)) return 'warning'
   return 'muted'
 })
 
@@ -113,6 +113,7 @@ const statusBadgeText = computed(() => {
   if (props.storage.status === 'checking') return '检查中'
   if (props.storage.status === 'syncing') return '同步中'
   if (props.storage.status === 'ready') return 'JSON 已绑定'
+  if (props.storage.status === 'read-only') return 'JSON 已导入'
   if (props.storage.status === 'needs-permission') return '需要授权'
   if (props.storage.status === 'error') return '同步异常'
   return '未绑定 JSON'
@@ -126,6 +127,7 @@ const statusTitle = computed(() => {
   if (props.storage.status === 'checking') return '正在检查数据文件'
   if (props.storage.status === 'syncing') return '正在同步 JSON 文件'
   if (props.storage.status === 'ready') return `已绑定 ${props.storage.fileName}`
+  if (props.storage.status === 'read-only') return `已导入 ${props.storage.fileName}`
   if (props.storage.status === 'needs-permission') return `需要重新打开 ${props.storage.fileName}`
   if (props.storage.status === 'error') return 'JSON 文件同步异常'
   return '当前使用浏览器缓存'
@@ -140,6 +142,10 @@ const statusDescription = computed(() => {
     return props.storage.lastSyncedAt
       ? `已同步到本机 JSON 文件，最近同步时间：${props.storage.lastSyncedAt}`
       : '已从本机 JSON 文件加载数据，后续修改会自动同步。'
+  }
+
+  if (props.storage.status === 'read-only') {
+    return '文件数据已经导入浏览器缓存，但浏览器未授予写入权限。后续修改不会自动写回该文件；可重新打开文件并授权写入。'
   }
 
   if (props.storage.status === 'needs-permission') {
