@@ -12,6 +12,7 @@
         :custom-target-hours="customTargetHours"
         :has-custom-target="hasCustomTarget"
         :completed-hours="completedHours"
+        :meal-allowance-total="mealAllowanceTotal"
         :remaining-hours="remainingHours"
         :completion-rate="completionRate"
         :rated-marker-rate="ratedMarkerRate"
@@ -172,6 +173,8 @@
               <li>工作日从 19:00 后开始记加班。</li>
               <li>周末和工作日都扣除 12:00-13:30、18:00-19:00。</li>
               <li>少于 1 小时无效，之后按 0.5 小时向下累计。</li>
+              <li>19:00 后实际加班满 1.5 小时，餐补 ¥25。</li>
+              <li>非工作日 08:30–18:00 扣午休后满 6 小时，再计餐补 ¥25。</li>
               <li>没有录入就不算加班，也不会自动补数据。</li>
             </ul>
           </article>
@@ -265,6 +268,7 @@ const {
   customTargetHours,
   hasCustomTarget,
   completedHours,
+  mealAllowanceTotal,
   remainingHours,
   completionRate,
   ratedMarkerRate,
@@ -537,6 +541,7 @@ async function importRecords(file) {
 <style scoped>
 .page-shell {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 22px;
 }
 

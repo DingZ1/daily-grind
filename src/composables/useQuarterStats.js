@@ -1,6 +1,7 @@
 import { computed } from 'vue'
 import { getQuarterTargetHours, getQuarterInfo, getQuarterKey } from '../utils/date'
 import { useOvertimeStore } from '../stores/overtime'
+import { sumMealAllowance } from '../utils/mealAllowance'
 
 export function useQuarterStats(referenceDate) {
   const store = useOvertimeStore()
@@ -17,6 +18,13 @@ export function useQuarterStats(referenceDate) {
     hasCustomTarget.value ? customTargetHours.value : autoTargetHours.value
   ))
   const completedHours = computed(() => Number(store.getQuarterTotals(referenceDate.value).toFixed(1)))
+  const mealAllowanceTotal = computed(() => {
+    const startDate = quarterInfo.value.start.format('YYYY-MM-DD')
+    const endDate = quarterInfo.value.end.format('YYYY-MM-DD')
+    return sumMealAllowance(store.recordList.filter((record) => (
+      record.date >= startDate && record.date <= endDate
+    )))
+  })
   const remainingHours = computed(() => Number(Math.max(targetHours.value - completedHours.value, 0).toFixed(1)))
   const completionRate = computed(() => {
     if (targetHours.value <= 0) return 100
@@ -38,6 +46,7 @@ export function useQuarterStats(referenceDate) {
     customTargetHours,
     hasCustomTarget,
     completedHours,
+    mealAllowanceTotal,
     remainingHours,
     completionRate,
     ratedMarkerRate,

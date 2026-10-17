@@ -35,10 +35,14 @@
         </div>
         <strong>{{ formatAttendanceHours(summary.leaveHours) }}</strong>
       </article>
+      <article class="metric-item">
+        <span>本月餐补</span>
+        <strong>¥{{ mealAllowanceTotal }}</strong>
+      </article>
     </div>
 
     <p class="attendance-note">
-      根据当前浏览月份中已保存的工作日/调休打卡记录动态计算，不会写入 JSON。
+      考勤根据当前浏览月份已保存的工作日/调休打卡记录计算；餐补包含本月全部加班记录，周末及节假日也计入，与迟到扣款分开统计。
     </p>
 
     <el-dialog
@@ -76,6 +80,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import dayjs from 'dayjs'
+import { sumMealAllowance } from '../utils/mealAllowance'
 import {
   buildMonthlyAttendanceSummary,
   formatAttendanceHours,
@@ -92,6 +97,10 @@ const props = defineProps({
 
 const leaveDialogOpen = ref(false)
 const monthLabel = computed(() => dayjs(props.referenceDate).format('YYYY年M月'))
+const mealAllowanceTotal = computed(() => {
+  const monthKey = dayjs(props.referenceDate).format('YYYY-MM')
+  return sumMealAllowance(props.records.filter((record) => record?.date?.startsWith(`${monthKey}-`)))
+})
 const summary = computed(() => buildMonthlyAttendanceSummary({
   records: props.records,
   referenceDate: props.referenceDate,
@@ -176,7 +185,7 @@ function formatRanges(ranges) {
 
 .attendance-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 12px;
 }
 

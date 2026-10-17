@@ -1,5 +1,6 @@
 import { DAY_KIND_LABELS } from '../constants/rules'
 import { formatAttendanceSegments } from '../utils/attendance'
+import { calculateMealAllowance } from '../utils/mealAllowance'
 
 const TRANSFER_COLUMNS = [
   { key: 'date', label: '日期' },
@@ -9,6 +10,7 @@ const TRANSFER_COLUMNS = [
   { key: 'endTime', label: '加班结束时间' },
   { key: 'attendanceSegments', label: '当天打卡记录' },
   { key: 'overtimeHours', label: '计入时长(h)' },
+  { key: 'mealAllowanceAmount', label: '餐补（元）' },
   { key: 'status', label: '状态' },
   { key: 'note', label: '备注' },
   { key: 'updatedAt', label: '更新时间' },
@@ -64,6 +66,10 @@ function getRecordCellValue(record, column) {
 
   if (column.key === 'attendanceSegments') {
     return formatAttendanceSegments(record.attendanceSegments)
+  }
+
+  if (column.key === 'mealAllowanceAmount') {
+    return calculateMealAllowance(record).totalAmount
   }
 
   return record[column.key] ?? ''
@@ -188,6 +194,9 @@ function buildWorksheetXml(rows) {
   const sheetRows = rows.map((row, rowIndex) => {
     const cells = row.map((cell, columnIndex) => {
       const ref = `${columnNameFromIndex(columnIndex)}${rowIndex + 1}`
+      if (rowIndex > 0 && TRANSFER_COLUMNS[columnIndex]?.key === 'mealAllowanceAmount') {
+        return `<c r="${ref}" t="n"><v>${cell}</v></c>`
+      }
       return `<c r="${ref}" t="inlineStr">${buildInlineStringXml(cell)}</c>`
     }).join('')
 
@@ -204,8 +213,8 @@ function buildWorksheetXml(rows) {
     <col min="2" max="3" width="14" customWidth="1"/>
     <col min="4" max="5" width="14" customWidth="1"/>
     <col min="6" max="6" width="30" customWidth="1"/>
-    <col min="7" max="7" width="14" customWidth="1"/>
-    <col min="8" max="10" width="18" customWidth="1"/>
+    <col min="7" max="8" width="14" customWidth="1"/>
+    <col min="9" max="11" width="18" customWidth="1"/>
   </cols>
   <sheetData>${sheetRows}</sheetData>
 </worksheet>`

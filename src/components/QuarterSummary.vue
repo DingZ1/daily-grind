@@ -108,6 +108,11 @@
             <strong>{{ completionRate.toFixed(1) }}%</strong>
             <p>剩余 {{ formatHours(remainingHours) }}h</p>
           </div>
+          <div class="detail-metric">
+            <span>季度餐补</span>
+            <strong>¥{{ mealAllowanceTotal }}</strong>
+            <p>含周末、节假日，独立累计</p>
+          </div>
         </div>
 
         <div class="target-editor">
@@ -166,6 +171,10 @@ const props = defineProps({
     default: false,
   },
   completedHours: {
+    type: Number,
+    default: 0,
+  },
+  mealAllowanceTotal: {
     type: Number,
     default: 0,
   },
@@ -643,7 +652,7 @@ function restoreAutoTarget() {
 
 .detail-metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border-top: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--border) 88%, transparent);
 }
@@ -781,7 +790,7 @@ function restoreAutoTarget() {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .detail-metric:nth-child(3) {
+  .detail-metric:nth-child(odd) {
     border-left: 0;
   }
 

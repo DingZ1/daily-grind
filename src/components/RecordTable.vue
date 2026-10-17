@@ -26,6 +26,7 @@
             <th>加班时间</th>
             <th>当天打卡记录</th>
             <th>时长</th>
+            <th>餐补</th>
             <th>状态</th>
             <th>备注</th>
           </tr>
@@ -37,11 +38,12 @@
             <td>{{ record.startTime }} - {{ record.endTime }}</td>
             <td>{{ formatAttendanceSegments(record.attendanceSegments) || '-' }}</td>
             <td>{{ record.overtimeHours.toFixed(1) }}h</td>
+            <td>¥{{ calculateMealAllowance(record).totalAmount }}</td>
             <td>{{ record.status === 'valid' ? '已计入' : '未计入' }}</td>
             <td>{{ record.note || '-' }}</td>
           </tr>
           <tr v-if="!records.length">
-            <td colspan="7" class="empty-cell">还没有记录，先从日历里选一天开始。</td>
+            <td colspan="8" class="empty-cell">还没有记录，先从日历里选一天开始。</td>
           </tr>
         </tbody>
       </table>
@@ -53,6 +55,7 @@
 import { ref } from 'vue'
 import { DAY_KIND_LABELS } from '../constants/rules'
 import { formatAttendanceSegments } from '../utils/attendance'
+import { calculateMealAllowance } from '../utils/mealAllowance'
 
 defineProps({
   records: {

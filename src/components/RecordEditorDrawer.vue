@@ -1,7 +1,7 @@
 <template>
   <el-drawer
     :model-value="open"
-    size="460px"
+    size="min(460px, 100vw)"
     class="record-drawer"
     :with-header="false"
     destroy-on-close
@@ -97,6 +97,21 @@
         <p>{{ previewHint }}</p>
       </div>
 
+      <section class="meal-preview" aria-live="polite">
+        <div class="meal-preview-head">
+          <h3>餐补预览</h3>
+          <strong>¥{{ mealAllowance.totalAmount }}</strong>
+        </div>
+        <p v-if="!showAttendanceSegments">
+          白天：{{ formatMealMinutes(mealAllowance.daytimeMinutes) }} / 6 小时，¥{{ mealAllowance.daytimeAmount }}
+        </p>
+        <p v-else>工作日及调休上班日只计算晚间餐补。</p>
+        <p>
+          晚间：{{ formatMealMinutes(mealAllowance.eveningMinutes) }} / 1.5 小时，¥{{ mealAllowance.eveningAmount }}
+        </p>
+        <p class="meal-rule">非工作日白天 08:30–18:00 扣午休后满 6 小时补 ¥25；所有日期 19:00 后满 1.5 小时再补 ¥25。</p>
+      </section>
+
       <div class="drawer-actions">
         <el-button v-if="hasRecord" type="danger" plain round @click="$emit('remove', date)">删除记录</el-button>
         <el-button type="primary" round native-type="submit">保存记录</el-button>
@@ -110,6 +125,7 @@ import { computed, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { DAY_KIND_LABELS } from '../constants/rules'
 import { buildOvertimePreviewText, explainOvertime } from '../utils/overtime'
+import { calculateMealAllowance } from '../utils/mealAllowance'
 import {
   createDefaultAttendanceSegments,
   isAttendanceDay,
@@ -164,6 +180,11 @@ const previewDetails = computed(() => {
 })
 const previewHours = computed(() => previewDetails.value.normalizedHours)
 const previewHint = computed(() => buildOvertimePreviewText(previewDetails.value))
+const mealAllowance = computed(() => calculateMealAllowance({
+  dayKind: props.dayKind,
+  startTime: localForm.startTime,
+  endTime: localForm.endTime,
+}))
 const restNotice = computed(() => {
   if (!previewDetails.value.overlaps.length) return ''
   return `已自动扣除：${previewDetails.value.overlaps.map((item) => item.label).join('、')}`
@@ -174,6 +195,12 @@ function cloneAttendanceSegments(segments) {
     startTime: segment.startTime,
     endTime: segment.endTime,
   }))
+}
+
+function formatMealMinutes(minutes) {
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  return remainingMinutes ? `${hours} 小时 ${remainingMinutes} 分钟` : `${hours} 小时`
 }
 
 function getInitialAttendanceSegments() {
@@ -353,6 +380,47 @@ function handleSubmit() {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+}
+
+.meal-preview {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+}
+
+.meal-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.meal-preview h3,
+.meal-preview p {
+  margin: 0;
+}
+
+.meal-preview h3 {
+  font-size: 1rem;
+}
+
+.meal-preview-head strong {
+  color: var(--brand);
+  font-size: 1.55rem;
+}
+
+.meal-preview p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.meal-preview .meal-rule {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 0.85rem;
 }
 
 @media (max-width: 640px) {
