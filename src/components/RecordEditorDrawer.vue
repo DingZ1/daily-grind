@@ -148,31 +148,32 @@ const localForm = reactive({
   attendanceSegments: [],
   note: '',
 })
-const showAttendanceSegments = computed(() => isAttendanceDay(props.dayKind))
+const effectiveDayKind = computed(() => props.record?.dayKind || props.dayKind)
+const showAttendanceSegments = computed(() => isAttendanceDay(effectiveDayKind.value))
 
 watch(
   () => [
     props.open,
     props.record,
-    props.dayKind,
+    effectiveDayKind.value,
     props.settings?.workdayStart,
     props.settings?.workdayEnd,
   ],
   () => {
     if (!props.open) return
-    localForm.startTime = props.record?.startTime || (props.dayKind === 'workday' || props.dayKind === 'makeup-workday' ? '19:00' : '08:30')
-    localForm.endTime = props.record?.endTime || (props.dayKind === 'workday' || props.dayKind === 'makeup-workday' ? '20:30' : '18:00')
+    localForm.startTime = props.record?.startTime || (showAttendanceSegments.value ? '19:00' : '08:30')
+    localForm.endTime = props.record?.endTime || (showAttendanceSegments.value ? '20:30' : '18:00')
     localForm.attendanceSegments = getInitialAttendanceSegments()
     localForm.note = props.record?.note || ''
   },
   { immediate: true }
 )
 
-const dayKindLabel = computed(() => DAY_KIND_LABELS[props.dayKind] || '')
+const dayKindLabel = computed(() => DAY_KIND_LABELS[effectiveDayKind.value] || '')
 const hasRecord = computed(() => Boolean(props.record))
 const previewDetails = computed(() => {
   return explainOvertime({
-    dayKind: props.dayKind,
+    dayKind: effectiveDayKind.value,
     startTime: localForm.startTime,
     endTime: localForm.endTime,
     settings: props.settings,
@@ -181,7 +182,7 @@ const previewDetails = computed(() => {
 const previewHours = computed(() => previewDetails.value.normalizedHours)
 const previewHint = computed(() => buildOvertimePreviewText(previewDetails.value))
 const mealAllowance = computed(() => calculateMealAllowance({
-  dayKind: props.dayKind,
+  dayKind: effectiveDayKind.value,
   startTime: localForm.startTime,
   endTime: localForm.endTime,
 }))
@@ -210,7 +211,7 @@ function getInitialAttendanceSegments() {
   }
 
   return createDefaultAttendanceSegments({
-    dayKind: props.dayKind,
+    dayKind: effectiveDayKind.value,
     settings: props.settings,
   })
 }
@@ -238,7 +239,7 @@ function handleSubmit() {
 
   emit('save', {
     date: props.date,
-    dayKind: props.dayKind,
+    dayKind: effectiveDayKind.value,
     startTime: localForm.startTime,
     endTime: localForm.endTime,
     attendanceSegments: attendanceValidation.segments,
